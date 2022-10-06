@@ -66,7 +66,7 @@ class BokehBioImageDataVis:
         # self.create_scatter_figure()
 
     def show_bokeh(self, obj: LayoutDOM):
-        self.scatter_figure.toolbar_location = None
+        # self.scatter_figure.toolbar_location = None
         show(obj)
 
     def initialize_data(self):
@@ -88,7 +88,7 @@ class BokehBioImageDataVis:
         self.scatter_figure = figure(plot_height=self.scatter_height,
                                      plot_width=self.scatter_width,
                                      x_axis_label=self.x_axis_key,
-                                     y_axis_label=self.y_axis_key)
+                                     y_axis_label=self.y_axis_key, tools="pan,wheel_zoom,box_zoom,reset")
 
         self.add_hover_highlight()
         self.scatter_figure.circle('highlight_x', 'highlight_y',
