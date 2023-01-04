@@ -9,6 +9,6 @@ setup(name='BokehBioImageDataVis',
       license='MIT',
       packages=['BokehBioImageDataVis'],
       install_requires=[
-          'bokeh', 'pandas', 'numpy'
+          'bokeh<3', 'pandas', 'numpy'
       ],
       zip_safe=False)
