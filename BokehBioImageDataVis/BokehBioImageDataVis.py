@@ -83,7 +83,7 @@ class BokehBioImageDataVis:
         self.highlight_csd_source = ColumnDataSource(data=self.highlight_df)
         self.highlight_csd_view = CDSView(source=self.highlight_csd_source)
 
-    def create_scatter_figure(self, colorKey=None, colorLegendKey=None):
+    def create_scatter_figure(self, colorKey=None, colorLegendKey=None, scatter_alpha=0.5, highlight_alpha=0.3):
 
         self.scatter_figure = figure(plot_height=self.scatter_height,
                                      plot_width=self.scatter_width,
@@ -93,7 +93,7 @@ class BokehBioImageDataVis:
         self.add_hover_highlight()
         self.scatter_figure.circle('highlight_x', 'highlight_y',
                                    source=self.highlight_csd_source, view=self.highlight_csd_view,
-                                   size=3 * self.scatter_size, color="red", alpha=0.3
+                                   size=3 * self.scatter_size, color="red", alpha=highlight_alpha
                                    )
 
         if colorKey and colorLegendKey:
@@ -101,12 +101,14 @@ class BokehBioImageDataVis:
             self.scatter_figure.circle('active_axis_x', 'active_axis_y',
                                        source=self.csd_source, view=self.csd_view,
                                        size=self.scatter_size,
+                                       alpha=scatter_alpha,
                                        color=colorKey, legend_group=colorLegendKey, name='main_graph'
                                        )
         else:
             self.scatter_figure.circle('active_axis_x', 'active_axis_y',
                                        source=self.csd_source, view=self.csd_view,
-                                       size=self.scatter_size, name='main_graph'
+                                       size=self.scatter_size, name='main_graph',
+                                       alpha=scatter_alpha
                                        # color="colors", legend_group='id'
                                        )
 
