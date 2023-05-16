@@ -1,3 +1,4 @@
+import os.path
 import uuid
 
 import numpy as np
@@ -21,9 +22,15 @@ class BokehBioImageDataVis:
                  x_axis_key=None,
                  y_axis_key=None,
                  dropdown_options=None,
+                 add_id_to_dataframe=True,
                  output_filename='BokehBioImageDataVis.html',
                  output_title='BokehBioImageDataVis', ):
         self.df = df
+        if add_id_to_dataframe:
+            self.df.insert(0, 'id', range(0, len(self.df))) # can be used with the slider
+
+        if not os.path.exists(os.path.dirname(output_filename)):
+            os.makedirs(os.path.dirname(output_filename))
 
         # holds tuples of [dataframe_key and html unique ideas]
         self.registered_video_elements = []
