@@ -411,6 +411,7 @@ class BokehBioImageDataVis:
             shutil.copyfile(src_path, target_path)
 
             # update old path to new relative path 'data/...'
+            target_path_relative = os.path.join('data', folder_structure_to_copy, filename)
             self.df[path_key] = self.df[path_key].replace(src_path, target_path)
 
             # also modify the csd_source
