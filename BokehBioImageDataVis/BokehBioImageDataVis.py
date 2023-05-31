@@ -1,4 +1,5 @@
 import os.path
+import shutil
 import uuid
 
 import numpy as np
@@ -23,14 +24,17 @@ class BokehBioImageDataVis:
                  y_axis_key=None,
                  dropdown_options=None,
                  add_id_to_dataframe=True,
+                 do_copy_files_to_output_dir=True,
+                 copy_files_dir_level=1,
                  output_filename='BokehBioImageDataVis.html',
                  output_title='BokehBioImageDataVis', ):
         self.df = df
         if add_id_to_dataframe:
             self.df.insert(0, 'id', range(0, len(self.df))) # can be used with the slider
 
-        if not os.path.exists(os.path.dirname(output_filename)):
-            os.makedirs(os.path.dirname(output_filename))
+        self.output_folder = os.path.dirname(output_filename)
+        if not os.path.exists(self.output_folder):
+            os.makedirs(self.output_folder)
 
         # holds tuples of [dataframe_key and html unique ideas]
         self.registered_video_elements = []
@@ -39,7 +43,18 @@ class BokehBioImageDataVis:
         # touple of id and update function
         self.registered_text_elements = []
 
+        # copy needed files relative to the output dir, e.g. for videos
+        # makes the visualisation portable, but also increases the size of the output dir
+        # additionally, some of the folder structure may be renamed to resolve uniqueness issues
+        self.do_copy_files_to_output_dir = do_copy_files_to_output_dir
+
+        # to keep some organisation, do not only copy the files, but preserve the folder structure up to the
+        # specified level
+        self.copy_files_dir_level = copy_files_dir_level
+        self.used_paths = [] # paths that are already used for data saving/copying (so that there are no duplicates appearing)
+
         self.non_data_keys = []
+        self.path_keys = []
         self.identify_numerical_variables()
         if x_axis_key is None:
             self.x_axis_key = self.numeric_options[0]
@@ -183,6 +198,11 @@ class BokehBioImageDataVis:
 
     def add_image_hover(self, key, image_height=300, image_width=300):
         self.non_data_keys.append(key)
+        self.path_keys.append(key)
+
+        if self.do_copy_files_to_output_dir:
+            self.copy_files_to_output_dir(path_key=key)
+            self.initialize_data()
 
         unique_html_id = uuid.uuid4()
         self.registered_image_elements.append({'id': unique_html_id, 'key': key})
@@ -245,6 +265,13 @@ class BokehBioImageDataVis:
 
     def add_video_hover(self, key, video_width=300, video_height=300):
         self.non_data_keys.append(key)
+        self.path_keys.append(key)
+
+        if self.do_copy_files_to_output_dir:
+            self.copy_files_to_output_dir(path_key=key)
+            self.initialize_data()
+
+
 
         unique_html_id = uuid.uuid4()
         self.registered_video_elements.append({'id': unique_html_id, 'key': key})
@@ -323,3 +350,57 @@ class BokehBioImageDataVis:
         self.scatter_figure.add_tools(hover_text)
 
         return div_text
+
+
+    def get_folder_structure(self, filepath):
+        # extract different folders of the filepath
+        # e.g. /home/user/folder1/folder2/file.txt
+        # returns ['home', 'user', 'folder1', 'folder2', 'file.txt']
+        folders = []
+        while 1:
+            filepath, folder = os.path.split(filepath)
+            if folder != "":
+                folders.append(folder)
+            else:
+                if filepath != "":
+                    folders.append(filepath)
+                break
+
+
+        # return only the folders up to the level of the copy_files_dir_level
+        # skip the first element because it is the filename
+        wanted_folder_structure =folders[1:1+self.copy_files_dir_level]
+
+        # merge the list to a filepath again
+        return os.path.join(*wanted_folder_structure)
+
+    def copy_files_to_output_dir(self, path_key):
+        for src_path in self.df[path_key].unique():
+
+            filename = os.path.basename(src_path)
+            folder_structure_to_copy = self.get_folder_structure(src_path)
+
+            target_path = os.path.join(self.output_folder, 'data', folder_structure_to_copy, filename)
+            # print(f'copy {src_path} to {target_path}')
+
+            if target_path in self.used_paths:
+                print(f'Warning: filename {filename} already used. Adding unique id to filename.')
+                filename_no_ext, ext = os.path.splitext(filename)
+                filename = f'{filename_no_ext}_{uuid.uuid4()}.{ext}'
+                target_path = os.path.join(self.output_folder, 'data', folder_structure_to_copy, filename)
+
+            self.used_paths.append(target_path)
+
+            if not os.path.exists(os.path.dirname(target_path)):
+                os.makedirs(os.path.dirname(target_path))
+            shutil.copyfile(src_path, target_path)
+
+            # update old path to new relative path 'data/...'
+            self.df[path_key] = self.df[path_key].replace(src_path, target_path)
+
+    def make_unzip_me_file(self):
+        filename = 'PLEASE_MAKE_SURE_IM_UNZIPPED.txt'
+
+        # create file
+        with open(os.path.join(self.output_folder, filename), 'w') as f:
+            f.write('Please make sure to unzip the data folder before opening the html file.')
