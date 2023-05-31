@@ -8,11 +8,8 @@ from bokeh.io import show, output_file
 from bokeh.layouts import column, row
 from bokeh.models import ColumnDataSource, CDSView, Select, CustomJS, Div, HoverTool, LayoutDOM, Slider
 from bokeh.plotting import figure
-
 from pandas.api.types import is_numeric_dtype
-from pandas.core.dtypes.common import is_integer_dtype, is_float_dtype
-
-from typing import TYPE_CHECKING, Any
+from pandas.core.dtypes.common import is_float_dtype
 
 
 class BokehBioImageDataVis:
@@ -30,9 +27,11 @@ class BokehBioImageDataVis:
                  output_title='BokehBioImageDataVis', ):
         self.df = df
         if add_id_to_dataframe:
-            self.df.insert(0, 'id', range(0, len(self.df))) # can be used with the slider
+            self.df.insert(0, 'id', range(0, len(self.df)))  # can be used with the slider
 
         self.output_folder = os.path.dirname(output_filename)
+        if self.output_folder == '':
+            self.output_folder = '.'  # current folder
         if not os.path.exists(self.output_folder):
             os.makedirs(self.output_folder)
 
@@ -51,18 +50,18 @@ class BokehBioImageDataVis:
         # to keep some organisation, do not only copy the files, but preserve the folder structure up to the
         # specified level
         self.copy_files_dir_level = copy_files_dir_level
-        self.used_paths = [] # paths that are already used for data saving/copying (so that there are no duplicates appearing)
+        self.used_paths = []  # paths that are already used for data saving/copying (so that there are no duplicates appearing)
 
         self.non_data_keys = []
         self.path_keys = []
         self.identify_numerical_variables()
         if x_axis_key is None:
-            self.x_axis_key = self.numeric_options[0]
+            self.x_axis_key = self.numeric_options[1] # options[0] is the id, 1 is the first real numeric option
         else:
             self.x_axis_key = x_axis_key
 
         if y_axis_key is None:
-            self.y_axis_key = self.numeric_options[1]
+            self.y_axis_key = self.numeric_options[2]
         else:
             self.y_axis_key = y_axis_key
 
@@ -85,10 +84,12 @@ class BokehBioImageDataVis:
         output_file(output_filename, title=output_title, mode="inline")
 
         self.initialize_data()
+        self.initialize_highlighter()
         # self.create_scatter_figure()
 
     def show_bokeh(self, obj: LayoutDOM):
         # self.scatter_figure.toolbar_location = None
+        self.add_hover_highlight()
         show(obj)
         self.make_unzip_me_file()
 
@@ -99,9 +100,10 @@ class BokehBioImageDataVis:
         self.csd_source = ColumnDataSource(data=self.df)
         self.csd_view = CDSView(source=self.csd_source)
 
-        self.highlight_df = pd.DataFrame({'highlight_x': [np.nan],
-                                          'highlight_y': [np.nan],
-                                          'last_selected_index': [np.nan]})
+    def initialize_highlighter(self, init_index=0):
+        self.highlight_df = pd.DataFrame({'highlight_x': [self.df['active_axis_x'][init_index]],
+                                          'highlight_y': [self.df['active_axis_y'][init_index]],
+                                          'last_selected_index': [0]})
 
         self.highlight_csd_source = ColumnDataSource(data=self.highlight_df)
         self.highlight_csd_view = CDSView(source=self.highlight_csd_source)
@@ -113,7 +115,6 @@ class BokehBioImageDataVis:
                                      x_axis_label=self.x_axis_key,
                                      y_axis_label=self.y_axis_key, tools="pan,wheel_zoom,box_zoom,reset")
 
-        self.add_hover_highlight()
         self.scatter_figure.circle('highlight_x', 'highlight_y',
                                    source=self.highlight_csd_source, view=self.highlight_csd_view,
                                    size=3 * self.scatter_size, color="red", alpha=highlight_alpha
@@ -180,20 +181,34 @@ class BokehBioImageDataVis:
     def add_hover_highlight(self):
 
         # TODO: probably can remove last_selected index in uuids and in all the other hovers and just use this one here?
-        codeHoverCellImage = ("const indices = cb_data.index.indices;\n"
-                              "if(indices.length > 0){\n"
-                              "    const index = indices[0];\n"
-                              '    highlight_df.data["highlight_x"][0] = source.data["active_axis_x"][index];\n'
-                              '    highlight_df.data["highlight_y"][0] = source.data["active_axis_y"][index];\n'
-                              "    highlight_df.data['last_selected_index'][0] = index;\n"
-                              '    highlight_df.change.emit();\n'
-                              "}")
+        code_hover_highlight = ("const indices = cb_data.index.indices;\n"
+                                "if(indices.length > 0){\n"
+                                "    const index = indices[0];\n"
+                                '    highlight_df.data["highlight_x"][0] = source.data["active_axis_x"][index];\n'
+                                '    highlight_df.data["highlight_y"][0] = source.data["active_axis_y"][index];\n'
+                                "    highlight_df.data['last_selected_index'][0] = index;\n"
+                                '    highlight_df.change.emit();\n')
 
-        img_JS_callback = CustomJS(args=dict(source=self.csd_source, highlight_df=self.highlight_csd_source),
-                                   code=codeHoverCellImage)
+
+        # check if self.manual_id_selection_slider exists
+        if hasattr(self, 'manual_id_selection_slider'):
+            code_hover_highlight += "    manual_id_selection.value = source.data['id'][index];\n"
+
+        code_hover_highlight += "}"
+
+        if hasattr(self, 'manual_id_selection_slider'):
+            img_js_callback = CustomJS(
+                args=dict(source=self.csd_source, manual_id_selection=self.manual_id_selection_slider,
+                          highlight_df=self.highlight_csd_source),
+                code=code_hover_highlight)
+        else:
+            img_js_callback = CustomJS(
+                args=dict(source=self.csd_source, highlight_df=self.highlight_csd_source),
+                code=code_hover_highlight)
+
 
         img_hover_tool = HoverTool(tooltips=None, names=['main_graph'])
-        img_hover_tool.callback = img_JS_callback
+        img_hover_tool.callback = img_js_callback
 
         self.scatter_figure.add_tools(img_hover_tool)
 
@@ -203,13 +218,12 @@ class BokehBioImageDataVis:
 
         if self.do_copy_files_to_output_dir:
             self.copy_files_to_output_dir(path_key=key)
-            self.initialize_data()
 
         unique_html_id = uuid.uuid4()
         self.registered_image_elements.append({'id': unique_html_id, 'key': key})
 
         text_div_html_cell_image = ('<img\n'
-                                    f'    src="" height="{image_height}"\n'
+                                    f'    src="{self.df[key][0]}" height="{image_height}"\n'
                                     f'    id="{unique_html_id}"\n'
                                     '    style="float: left; margin: 0px 15px 15px 0px;"\n'
                                     '></img>\n'
@@ -233,36 +247,38 @@ class BokehBioImageDataVis:
 
         return div_img
 
-    def add_slider(self):
-        manual_id_selection_slider = Slider(start=0, end=len(self.df) - 1, value=1, step=1, title="Id")
 
-        JS_callback_video = "const index = manual_id_selection.value;\n"
+    def add_slider(self):
+        # prerequisites: all videos/image/text elements have to be registered
+        self.manual_id_selection_slider = Slider(start=0, end=len(self.df) - 1, value=0, step=1, title="Id")
+
+        callback_slider = "const index = manual_id_selection.value;\n"
         for registered_video_element in self.registered_video_elements:
             current_key = registered_video_element['key']
             current_id = registered_video_element['id']
-            JS_callback_video += f'document.getElementById("{current_id}").src = source.data["{current_key}"][index];\n'
+            callback_slider += f'document.getElementById("{current_id}").src = source.data["{current_key}"][index];\n'
         for registered_image_element in self.registered_image_elements:
             current_key = registered_image_element['key']
             current_id = registered_image_element['id']
-            JS_callback_video += f'document.getElementById("{current_id}").src = source.data["{current_key}"][index];\n'
+            callback_slider += f'document.getElementById("{current_id}").src = source.data["{current_key}"][index];\n'
         for registered_text_element in self.registered_text_elements:
             current_update_function = registered_text_element['js_update']
-            JS_callback_video += current_update_function.replace("    ", "")
+            callback_slider += current_update_function.replace("    ", "")
 
-        JS_callback_video += 'highlight_df.data["highlight_x"][0] = source.data["active_axis_x"][index];\n'
-        JS_callback_video += f'highlight_df.data["highlight_y"][0] = source.data["active_axis_y"][index];\n'
-        JS_callback_video += f'highlight_df.data["last_selected_index"][0] = index;\n'
-        JS_callback_video += f'highlight_df.change.emit();\n'
-        JS_callback_video += "source.change.emit();"
+        callback_slider += f'highlight_df.data["highlight_x"][0] = source.data["active_axis_x"][index];\n'
+        callback_slider += f'highlight_df.data["highlight_y"][0] = source.data["active_axis_y"][index];\n'
+        callback_slider += f'highlight_df.data["last_selected_index"][0] = index;\n'
+        callback_slider += f'highlight_df.change.emit();\n'
+        callback_slider += f"source.change.emit();"
+        # callback_slider += f"console.log(manual_id_selection.value);"
 
         callback = CustomJS(
-            args=dict(source=self.csd_source, manual_id_selection=manual_id_selection_slider,
+            args=dict(source=self.csd_source, manual_id_selection=self.manual_id_selection_slider,
                       highlight_df=self.highlight_csd_source),
-            code=JS_callback_video)
+            code=callback_slider)
 
-        manual_id_selection_slider.js_on_change('value', callback)
-
-        return manual_id_selection_slider
+        self.manual_id_selection_slider.js_on_change('value', callback)
+        return self.manual_id_selection_slider
 
     def add_video_hover(self, key, video_width=300, video_height=300):
         self.non_data_keys.append(key)
@@ -270,17 +286,14 @@ class BokehBioImageDataVis:
 
         if self.do_copy_files_to_output_dir:
             self.copy_files_to_output_dir(path_key=key)
-            self.initialize_data()
-
-
 
         unique_html_id = uuid.uuid4()
         self.registered_video_elements.append({'id': unique_html_id, 'key': key})
 
         text_div_videos = ('<div style="clear:left; float: left; margin: 0px 15px 15px 0px;";>\n'
                            f'    <video width="{video_width}" controls autoplay muted loop id="{unique_html_id}" data-value="firstvalue">\n'
-                           '    <source src="" type="video/mp4">\n'
-                           '    Your browser does not support the video tag.\n'
+                           f'    <source src="{self.df[key][0]}" type="video/mp4">\n'
+                           f'    Your browser does not support the video tag.\n'
                            '</div>\n')
 
         div_video = Div(width=video_width, width_policy="fixed", height=video_height,
@@ -289,9 +302,9 @@ class BokehBioImageDataVis:
         JS_callback_video = \
             ("const indices = cb_data.index.indices;\n"
              "if(indices.length > 0){\n"
-              "    const index = indices[0];\n"
+             "    const index = indices[0];\n"
              f'    const old_index = document.getElementById("{unique_html_id}").getAttribute("data-value");\n'
-              '    if(index != old_index){\n'
+             '    if(index != old_index){\n'
              f'        document.getElementById("{unique_html_id}").src = source.data["{key}"][index];\n'
              f'        document.getElementById("{unique_html_id}").setAttribute("data-value", index);\n'
              '    }\n'
@@ -311,7 +324,6 @@ class BokehBioImageDataVis:
         prefix = ("const indices = cb_data.index.indices;\n"
                   "if(indices.length > 0){\n"
                   "    const index = indices[0];")
-
 
         unique_html_id = uuid.uuid4()
 
@@ -352,7 +364,6 @@ class BokehBioImageDataVis:
 
         return div_text
 
-
     def get_folder_structure(self, filepath):
         # extract different folders of the filepath
         # e.g. /home/user/folder1/folder2/file.txt
@@ -367,10 +378,9 @@ class BokehBioImageDataVis:
                     folders.append(filepath)
                 break
 
-
         # return only the folders up to the level of the copy_files_dir_level
         # skip the first element because it is the filename
-        wanted_folder_structure =folders[1:1+self.copy_files_dir_level]
+        wanted_folder_structure = folders[1:1 + self.copy_files_dir_level]
 
         # merge the list to a filepath again
         return os.path.join(*wanted_folder_structure)
@@ -394,10 +404,22 @@ class BokehBioImageDataVis:
 
             if not os.path.exists(os.path.dirname(target_path)):
                 os.makedirs(os.path.dirname(target_path))
+
+            # check if paths are the same, also incorporating e.g. ./ at the beginning
+            if os.path.normpath(src_path) == os.path.normpath(target_path):
+                continue
             shutil.copyfile(src_path, target_path)
 
             # update old path to new relative path 'data/...'
             self.df[path_key] = self.df[path_key].replace(src_path, target_path)
+
+            # also modify the csd_source
+            keys_string_array =  self.csd_source.data[path_key]
+            for ix, old_key in enumerate(keys_string_array):
+                if old_key == src_path:
+                    keys_string_array[ix] = target_path
+                    break
+            self.csd_source.data[path_key] = np.array(keys_string_array)
 
     def make_unzip_me_file(self):
         filename = 'PLEASE_MAKE_SURE_IM_UNZIPPED.txt'
