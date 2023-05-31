@@ -90,6 +90,7 @@ class BokehBioImageDataVis:
     def show_bokeh(self, obj: LayoutDOM):
         # self.scatter_figure.toolbar_location = None
         show(obj)
+        self.make_unzip_me_file()
 
     def initialize_data(self):
         self.df['active_axis_x'] = self.df[self.x_axis_key]
