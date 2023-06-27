@@ -392,7 +392,7 @@ class BokehBioImageDataVis:
             folder_structure_to_copy = self.get_folder_structure(src_path)
 
             target_path = os.path.join(self.output_folder, 'data', folder_structure_to_copy, filename)
-            # print(f'copy {src_path} to {target_path}')
+            print(f'copy {src_path} to {target_path}')
 
             if target_path in self.used_paths:
                 print(f'Warning: filename {filename} already used. Adding unique id to filename.')
@@ -407,20 +407,16 @@ class BokehBioImageDataVis:
 
             # check if paths are the same, also incorporating e.g. ./ at the beginning
             if os.path.normpath(src_path) == os.path.normpath(target_path):
+                print('Warning: src and target path are the same. Skipping copy.')
                 continue
             shutil.copyfile(src_path, target_path)
 
             # update old path to new relative path 'data/...'
             target_path_relative = os.path.join('data', folder_structure_to_copy, filename)
-            self.df[path_key] = self.df[path_key].replace(src_path, target_path)
+            self.df[path_key] = self.df[path_key].replace(src_path, target_path_relative)
 
-            # also modify the csd_source
-            keys_string_array =  self.csd_source.data[path_key]
-            for ix, old_key in enumerate(keys_string_array):
-                if old_key == src_path:
-                    keys_string_array[ix] = target_path
-                    break
-            self.csd_source.data[path_key] = np.array(keys_string_array)
+        # also modify the csd_source
+        self.csd_source.data[path_key] = self.df[path_key]
 
     def make_unzip_me_file(self):
         filename = 'PLEASE_MAKE_SURE_IM_UNZIPPED.txt'
