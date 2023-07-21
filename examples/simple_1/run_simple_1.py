@@ -15,7 +15,7 @@ data = pd.DataFrame({'x1': [1, 2, 3],
                      })
 
 # create main object
-bokeh_fig = BokehBioImageDataVis(data)
+bokeh_fig = BokehBioImageDataVis(data, output_filename='example_simple_1/vis.html')
 scatter_plot = bokeh_fig.create_scatter_figure()
 
 # create hovers
