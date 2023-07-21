@@ -388,6 +388,11 @@ class BokehBioImageDataVis:
     def copy_files_to_output_dir(self, path_key):
         for src_path in self.df[path_key].unique():
 
+            # check if the path is a valid path
+            if not os.path.exists(src_path):
+                print(f'Warning: {src_path} does not exist. Skipping.')
+                continue
+
             filename = os.path.basename(src_path)
             folder_structure_to_copy = self.get_folder_structure(src_path)
 
@@ -404,6 +409,11 @@ class BokehBioImageDataVis:
 
             if not os.path.exists(os.path.dirname(target_path)):
                 os.makedirs(os.path.dirname(target_path))
+
+            # check if folder is writeable
+            if not os.access(os.path.dirname(target_path), os.W_OK):
+                print(f'Warning: {os.path.dirname(target_path)} is not writeable. Skipping.')
+                continue
 
             # check if paths are the same, also incorporating e.g. ./ at the beginning
             if os.path.normpath(src_path) == os.path.normpath(target_path):
