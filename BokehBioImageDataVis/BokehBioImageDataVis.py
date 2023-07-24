@@ -1,17 +1,19 @@
 import os.path
 import uuid
+from os.path import join
 import pandas as pd
 from bokeh.io import show, output_file
 from bokeh.layouts import column, row
 from bokeh.models import ColumnDataSource, CDSView, Select, CustomJS, Div, HoverTool, LayoutDOM, Slider
-from bokeh.palettes import Category10, Category20, Set3
+from bokeh.palettes import Category10, Category20
 from bokeh.plotting import figure
-from pandas.api.types import is_numeric_dtype
-from pandas.core.dtypes.common import is_float_dtype
 import logging
 
 from BokehBioImageDataVis.src.colormapping import random_color
-from BokehBioImageDataVis.src.file_handling import copy_files_to_output_dir
+from BokehBioImageDataVis.src.file_handling import copy_files_to_output_dir, create_file
+from BokehBioImageDataVis.src.html_snippets import image_html_and_callback, text_html_and_callback, \
+    video_html_and_callback
+from BokehBioImageDataVis.src.utils import identify_numerical_variables
 
 
 class BokehBioImageDataVis:
@@ -58,6 +60,8 @@ class BokehBioImageDataVis:
         if category_key:
             logging.info(f'Category key: {category_key}')
             self.category_key = category_key
+        else:
+            self.category_key = None
 
         self.output_folder = os.path.dirname(output_filename)
         if self.output_folder == '':
@@ -89,7 +93,8 @@ class BokehBioImageDataVis:
 
         self.non_data_keys = []
         self.path_keys = []
-        self.identify_numerical_variables()
+        self.numeric_options = identify_numerical_variables(self.df)
+
         if x_axis_key is None:
             self.x_axis_key = self.numeric_options[1]  # options[0] is the id, 1 is the first real numeric option
         else:
@@ -125,7 +130,10 @@ class BokehBioImageDataVis:
         # self.scatter_figure.toolbar_location = None
         self.add_hover_highlight()
         show(obj)
-        self.make_unzip_me_file()
+
+        # create a file that reminds the user to unzip the data folder, this was a common issue
+        create_file(filename=join(self.output_folder, 'PLEASE_MAKE_SURE_IM_UNZIPPED.txt'),
+                    content="Please make sure to unzip the data folder before opening the html file.")
 
     def initialize_data(self):
         self.df['active_axis_x'] = self.df[self.x_axis_key]
@@ -236,12 +244,6 @@ class BokehBioImageDataVis:
 
         return row([self.scatterplot_select_options, self.scatter_figure])
 
-    def identify_numerical_variables(self):
-        self.numeric_options = []
-        for key in list(self.df.keys()):
-            if is_numeric_dtype(self.df[key]):
-                self.numeric_options.append(key)
-
     def add_hover_highlight(self):
 
         # TODO: probably can remove last_selected index in uuids and in all the other hovers and just use this one here?
@@ -287,24 +289,12 @@ class BokehBioImageDataVis:
 
         unique_html_id = uuid.uuid4()
         self.registered_image_elements.append({'id': unique_html_id, 'key': key})
-
-        text_div_html_cell_image = ('<img\n'
-                                    f'    src="{self.df[key][0]}" height="{image_height}"\n'
-                                    f'    id="{unique_html_id}"\n'
-                                    '    style="float: left; margin: 0px 15px 15px 0px;"\n'
-                                    '></img>\n'
-                                    '')
-        div_img = Div(width=image_width, height=image_height, width_policy="fixed",
-                      text=text_div_html_cell_image)
-
-        codeHoverCellImage = ("const indices = cb_data.index.indices\n"
-                              "if(indices.length > 0){\n"
-                              "    const index = indices[0];\n"
-                              f'   document.getElementById("{unique_html_id}").src = source.data["{key}"][index];\n'
-                              "}")
+        div_img, callback_img = image_html_and_callback(unique_html_id=unique_html_id,
+                                                        df=self.df, key=key,
+                                                        image_height=image_height, image_width=image_width)
 
         img_JS_callback = CustomJS(args=dict(source=self.csd_source, div=div_img),
-                                   code=codeHoverCellImage)
+                                   code=callback_img)
 
         img_hover_tool = HoverTool(tooltips=None, names=['main_graph'])
         img_hover_tool.callback = img_JS_callback
@@ -355,31 +345,15 @@ class BokehBioImageDataVis:
                                                                 used_paths=self.used_paths,
                                                                 copy_files_dir_level=self.copy_files_dir_level)
             self.csd_source.data[key] = self.df[key]
+
         unique_html_id = uuid.uuid4()
         self.registered_video_elements.append({'id': unique_html_id, 'key': key})
-
-        text_div_videos = ('<div style="clear:left; float: left; margin: 0px 15px 15px 0px;";>\n'
-                           f'    <video width="{video_width}" controls autoplay muted loop id="{unique_html_id}" data-value="firstvalue">\n'
-                           f'    <source src="{self.df[key][0]}" type="video/mp4">\n'
-                           f'    Your browser does not support the video tag.\n'
-                           '</div>\n')
-
-        div_video = Div(width=video_width, width_policy="fixed", height=video_height,
-                        text=text_div_videos)
-
-        JS_callback_video = \
-            ("const indices = cb_data.index.indices;\n"
-             "if(indices.length > 0){\n"
-             "    const index = indices[0];\n"
-             f'    const old_index = document.getElementById("{unique_html_id}").getAttribute("data-value");\n'
-             '    if(index != old_index){\n'
-             f'        document.getElementById("{unique_html_id}").src = source.data["{key}"][index];\n'
-             f'        document.getElementById("{unique_html_id}").setAttribute("data-value", index);\n'
-             '    }\n'
-             "}")
+        div_video, JS_code = video_html_and_callback(unique_html_id=unique_html_id,
+                                                     df=self.df, key=key,
+                                                     video_width=video_width, video_height=video_height)
 
         video_JS_callback = CustomJS(args=dict(source=self.csd_source, div=div_video),
-                                     code=JS_callback_video)
+                                     code=JS_code)
 
         video_hover_tool = HoverTool(tooltips=None, names=['main_graph'])
         video_hover_tool.callback = video_JS_callback
@@ -389,52 +363,21 @@ class BokehBioImageDataVis:
         return div_video
 
     def create_hover_text(self, df_keys_to_show=None, container_width=500, container_height=300):
-        prefix = ("const indices = cb_data.index.indices;\n"
-                  "if(indices.length > 0){\n"
-                  "    const index = indices[0];")
-
         unique_html_id = uuid.uuid4()
 
-        combined_str = ""
-        assigment_char = '='
-        if df_keys_to_show is None:
-            df_keys_to_show = list(self.df.keys())
-        for key in df_keys_to_show:
-            if key == 'active_axis_x' or key == 'active_axis_y':
-                continue
-            if key in self.non_data_keys:
-                logging.debug(f'{key} is non_data.')
-                continue
-            if is_float_dtype(self.df[key]):
-                line = f'    document.getElementById("{unique_html_id}").innerHTML {assigment_char} "<b>{key}</b>:" + " " + source.data["{key}"][index]' \
-                       f'.toFixed({self.scatter_data_hover_float_precision}).toString() + "<br>";\n'
-            else:
-                line = f'    document.getElementById("{unique_html_id}").innerHTML {assigment_char} "<b>{key}</b>:" + " " + source.data["{key}"][index].toString() + "<br>";\n'
-            assigment_char = '+='
-            combined_str += line
+        div_text, code_text, js_update_str = text_html_and_callback(unique_id=unique_html_id,
+                                                                    df=self.df, df_keys_to_show=df_keys_to_show,
+                                                                    container_width=container_width,
+                                                                    container_height=container_height,
+                                                                    float_precision=self.scatter_data_hover_float_precision)
 
-        self.registered_text_elements.append({'id': unique_html_id, 'js_update': combined_str})
+        self.registered_text_elements.append({'id': unique_html_id, 'js_update': js_update_str})
 
-        postfix = "}"
-
-        codeScatterDataHover = f'{prefix}\n{combined_str}\n{postfix}'
-        div_text = Div(width=container_width,
-                       height=container_height, height_policy="fixed",
-                       text=f"<div id='{unique_html_id}' style='clear:left; float: left; margin: 0px 15px 15px 0px;';></div>")
-
-        callback_text = CustomJS(args=dict(source=self.csd_source,
-                                           div=div_text),
-                                 code=codeScatterDataHover)
+        callback_text = CustomJS(args=dict(source=self.csd_source, div=div_text),
+                                 code=code_text)
 
         hover_text = HoverTool(tooltips=None, names=['main_graph'])
         hover_text.callback = callback_text
         self.scatter_figure.add_tools(hover_text)
 
         return div_text
-
-    def make_unzip_me_file(self):
-        filename = 'PLEASE_MAKE_SURE_IM_UNZIPPED.txt'
-
-        # create file
-        with open(os.path.join(self.output_folder, filename), 'w') as f:
-            f.write('Please make sure to unzip the data folder before opening the html file.')

@@ -4,6 +4,9 @@ import uuid
 from os import makedirs
 from os.path import split, join, basename, splitext, exists, dirname, normpath
 
+def create_file(filename, content):
+    with open(filename, 'w') as f:
+        f.write(content)
 
 def get_folder_structure(filepath, copy_files_dir_level):
     folders = []
