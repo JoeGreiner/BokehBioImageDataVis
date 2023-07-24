@@ -1,15 +1,17 @@
 import os.path
-import shutil
 import uuid
-
-import numpy as np
 import pandas as pd
 from bokeh.io import show, output_file
 from bokeh.layouts import column, row
 from bokeh.models import ColumnDataSource, CDSView, Select, CustomJS, Div, HoverTool, LayoutDOM, Slider
+from bokeh.palettes import Category10, Category20, Set3
 from bokeh.plotting import figure
 from pandas.api.types import is_numeric_dtype
 from pandas.core.dtypes.common import is_float_dtype
+import logging
+
+from BokehBioImageDataVis.src.colormapping import random_color
+from BokehBioImageDataVis.src.file_handling import copy_files_to_output_dir
 
 
 class BokehBioImageDataVis:
@@ -19,19 +21,50 @@ class BokehBioImageDataVis:
                  scatter_data_hover_float_precision=2,
                  x_axis_key=None,
                  y_axis_key=None,
+                 category_key=None,
                  dropdown_options=None,
                  add_id_to_dataframe=True,
                  do_copy_files_to_output_dir=True,
                  copy_files_dir_level=1,
                  output_filename='BokehBioImageDataVis.html',
                  output_title='BokehBioImageDataVis', ):
+        '''
+        Initialize the main object, where the data is stored and the scatter plot is created.
+        Can be used to create a scatter plot with images and videos as hover.
+
+        :param df: pd.DataFrame with data to visualize
+        :param scatter_width: width of scatter plot
+        :param scatter_height: height of scatter plot
+        :param scatter_size: size of scatter points
+        :param do_scatter_data_hover: add a hover circle around active scatter point
+        :param scatter_data_hover_float_precision: precision of hover text data, when floats are converted to strings
+        :param x_axis_key: default x axis key
+        :param y_axis_key: default y axis key
+        :param category_key: if a category key is given, the scatter points are colored according to this key
+        :param dropdown_options: can be used to filter the dropdown options to only relevant ones, list of strings
+        :param add_id_to_dataframe: add an id column to the dataframe, which can be used with the slider
+        :param do_copy_files_to_output_dir: copy files to output dir, relative paths, to make everything portable
+        :param copy_files_dir_level: how many levels of the folder structure should be preserved when copying files
+        :param output_filename: html output filename
+        :param output_title: title of the html output
+        '''
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
+
         self.df = df
         if add_id_to_dataframe:
+            logging.info('Adding id column to dataframe')
             self.df.insert(0, 'id', range(0, len(self.df)))  # can be used with the slider
+
+        if category_key:
+            logging.info(f'Category key: {category_key}')
+            self.category_key = category_key
 
         self.output_folder = os.path.dirname(output_filename)
         if self.output_folder == '':
             self.output_folder = '.'  # current folder
+        logging.info(f'Output folder: {self.output_folder}')
+
+        logging.info(f'Output filename: {output_filename}')
         if not os.path.exists(self.output_folder):
             os.makedirs(self.output_folder)
 
@@ -45,10 +78,12 @@ class BokehBioImageDataVis:
         # copy needed files relative to the output dir, e.g. for videos
         # makes the visualisation portable, but also increases the size of the output dir
         # additionally, some of the folder structure may be renamed to resolve uniqueness issues
+        logging.info(f'Copy files to output dir: {do_copy_files_to_output_dir}')
         self.do_copy_files_to_output_dir = do_copy_files_to_output_dir
 
         # to keep some organisation, do not only copy the files, but preserve the folder structure up to the
         # specified level
+        logging.info(f'Copy files dir level: {copy_files_dir_level}')
         self.copy_files_dir_level = copy_files_dir_level
         self.used_paths = []  # paths that are already used for data saving/copying (so that there are no duplicates appearing)
 
@@ -56,7 +91,7 @@ class BokehBioImageDataVis:
         self.path_keys = []
         self.identify_numerical_variables()
         if x_axis_key is None:
-            self.x_axis_key = self.numeric_options[1] # options[0] is the id, 1 is the first real numeric option
+            self.x_axis_key = self.numeric_options[1]  # options[0] is the id, 1 is the first real numeric option
         else:
             self.x_axis_key = x_axis_key
 
@@ -73,7 +108,7 @@ class BokehBioImageDataVis:
                 if option in df.columns:
                     self.dropdown_options.append(option)
                 else:
-                    print(f'Warning: couldnt find dropdown option {option} in df, skipping option.')
+                    logging.warning(f'Warning: couldnt find dropdown option {option} in df, skipping option.')
 
         self.scatter_width = scatter_width
         self.scatter_height = scatter_height
@@ -85,7 +120,6 @@ class BokehBioImageDataVis:
 
         self.initialize_data()
         self.initialize_highlighter()
-        # self.create_scatter_figure()
 
     def show_bokeh(self, obj: LayoutDOM):
         # self.scatter_figure.toolbar_location = None
@@ -96,6 +130,26 @@ class BokehBioImageDataVis:
     def initialize_data(self):
         self.df['active_axis_x'] = self.df[self.x_axis_key]
         self.df['active_axis_y'] = self.df[self.y_axis_key]
+
+        if self.category_key:
+            # add a color column to the dataframe, one unique color per category
+            unique_categories = self.df[self.category_key].unique()
+
+            # if smaller than 11, use tab10, otherwise tab20, if bigger, use random colors
+            if len(unique_categories) < 3:
+                palette = Category10[3]
+            elif len(unique_categories) < 11:
+                palette = Category10[len(unique_categories)]
+            elif len(unique_categories) < 21:
+                palette = Category20[len(unique_categories)]
+            else:
+                palette = [random_color() for _ in range(len(unique_categories))]
+                # convert rgb to hex, e.g. #5254a3
+                palette = ['#%02x%02x%02x' % (int(r * 255), int(g * 255), int(b * 255)) for r, g, b in palette]
+
+            # assign to dataframe based on category
+            self.df['color_mapping'] = [palette[unique_categories.tolist().index(category)] for category in
+                                        self.df[self.category_key]]
 
         self.csd_source = ColumnDataSource(data=self.df)
         self.csd_view = CDSView(source=self.csd_source)
@@ -113,15 +167,25 @@ class BokehBioImageDataVis:
         self.scatter_figure = figure(plot_height=self.scatter_height,
                                      plot_width=self.scatter_width,
                                      x_axis_label=self.x_axis_key,
-                                     y_axis_label=self.y_axis_key, tools="pan,wheel_zoom,box_zoom,reset")
+                                     y_axis_label=self.y_axis_key,
+                                     tools="pan,wheel_zoom,box_zoom,reset")
 
         self.scatter_figure.circle('highlight_x', 'highlight_y',
                                    source=self.highlight_csd_source, view=self.highlight_csd_view,
                                    size=3 * self.scatter_size, color="red", alpha=highlight_alpha
                                    )
-
-        if colorKey and colorLegendKey:
-            print(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
+        if self.category_key:
+            logging.info(f'Using {self.category_key} as color key.')
+            self.scatter_figure.circle('active_axis_x', 'active_axis_y',
+                                       source=self.csd_source, view=self.csd_view,
+                                       size=self.scatter_size,
+                                       alpha=scatter_alpha,
+                                       color='color_mapping', legend_group=self.category_key, name='main_graph'
+                                       )
+            # change legend location to bottom right
+            self.scatter_figure.legend.location = "bottom_right"
+        elif colorKey and colorLegendKey:
+            logging.info(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
             self.scatter_figure.circle('active_axis_x', 'active_axis_y',
                                        source=self.csd_source, view=self.csd_view,
                                        size=self.scatter_size,
@@ -189,7 +253,6 @@ class BokehBioImageDataVis:
                                 "    highlight_df.data['last_selected_index'][0] = index;\n"
                                 '    highlight_df.change.emit();\n')
 
-
         # check if self.manual_id_selection_slider exists
         if hasattr(self, 'manual_id_selection_slider'):
             code_hover_highlight += "    manual_id_selection.value = source.data['id'][index];\n"
@@ -206,7 +269,6 @@ class BokehBioImageDataVis:
                 args=dict(source=self.csd_source, highlight_df=self.highlight_csd_source),
                 code=code_hover_highlight)
 
-
         img_hover_tool = HoverTool(tooltips=None, names=['main_graph'])
         img_hover_tool.callback = img_js_callback
 
@@ -217,7 +279,11 @@ class BokehBioImageDataVis:
         self.path_keys.append(key)
 
         if self.do_copy_files_to_output_dir:
-            self.copy_files_to_output_dir(path_key=key)
+            self.df, self.used_paths = copy_files_to_output_dir(df=self.df, path_key=key,
+                                                                output_folder=self.output_folder,
+                                                                used_paths=self.used_paths,
+                                                                copy_files_dir_level=self.copy_files_dir_level)
+            self.csd_source.data[key] = self.df[key]
 
         unique_html_id = uuid.uuid4()
         self.registered_image_elements.append({'id': unique_html_id, 'key': key})
@@ -246,7 +312,6 @@ class BokehBioImageDataVis:
         self.scatter_figure.add_tools(img_hover_tool)
 
         return div_img
-
 
     def add_slider(self):
         # prerequisites: all videos/image/text elements have to be registered
@@ -285,8 +350,11 @@ class BokehBioImageDataVis:
         self.path_keys.append(key)
 
         if self.do_copy_files_to_output_dir:
-            self.copy_files_to_output_dir(path_key=key)
-
+            self.df, self.used_paths = copy_files_to_output_dir(df=self.df, path_key=key,
+                                                                output_folder=self.output_folder,
+                                                                used_paths=self.used_paths,
+                                                                copy_files_dir_level=self.copy_files_dir_level)
+            self.csd_source.data[key] = self.df[key]
         unique_html_id = uuid.uuid4()
         self.registered_video_elements.append({'id': unique_html_id, 'key': key})
 
@@ -335,7 +403,7 @@ class BokehBioImageDataVis:
             if key == 'active_axis_x' or key == 'active_axis_y':
                 continue
             if key in self.non_data_keys:
-                print(f'{key} is non_data.')
+                logging.debug(f'{key} is non_data.')
                 continue
             if is_float_dtype(self.df[key]):
                 line = f'    document.getElementById("{unique_html_id}").innerHTML {assigment_char} "<b>{key}</b>:" + " " + source.data["{key}"][index]' \
@@ -363,60 +431,6 @@ class BokehBioImageDataVis:
         self.scatter_figure.add_tools(hover_text)
 
         return div_text
-
-    def get_folder_structure(self, filepath):
-        # extract different folders of the filepath
-        # e.g. /home/user/folder1/folder2/file.txt
-        # returns ['home', 'user', 'folder1', 'folder2', 'file.txt']
-        folders = []
-        while 1:
-            filepath, folder = os.path.split(filepath)
-            if folder != "":
-                folders.append(folder)
-            else:
-                if filepath != "":
-                    folders.append(filepath)
-                break
-
-        # return only the folders up to the level of the copy_files_dir_level
-        # skip the first element because it is the filename
-        wanted_folder_structure = folders[1:1 + self.copy_files_dir_level]
-
-        # merge the list to a filepath again
-        return os.path.join(*wanted_folder_structure)
-
-    def copy_files_to_output_dir(self, path_key):
-        for src_path in self.df[path_key].unique():
-
-            filename = os.path.basename(src_path)
-            folder_structure_to_copy = self.get_folder_structure(src_path)
-
-            target_path = os.path.join(self.output_folder, 'data', folder_structure_to_copy, filename)
-            print(f'copy {src_path} to {target_path}')
-
-            if target_path in self.used_paths:
-                print(f'Warning: filename {filename} already used. Adding unique id to filename.')
-                filename_no_ext, ext = os.path.splitext(filename)
-                filename = f'{filename_no_ext}_{uuid.uuid4()}.{ext}'
-                target_path = os.path.join(self.output_folder, 'data', folder_structure_to_copy, filename)
-
-            self.used_paths.append(target_path)
-
-            if not os.path.exists(os.path.dirname(target_path)):
-                os.makedirs(os.path.dirname(target_path))
-
-            # check if paths are the same, also incorporating e.g. ./ at the beginning
-            if os.path.normpath(src_path) == os.path.normpath(target_path):
-                print('Warning: src and target path are the same. Skipping copy.')
-                continue
-            shutil.copyfile(src_path, target_path)
-
-            # update old path to new relative path 'data/...'
-            target_path_relative = os.path.join('data', folder_structure_to_copy, filename)
-            self.df[path_key] = self.df[path_key].replace(src_path, target_path_relative)
-
-        # also modify the csd_source
-        self.csd_source.data[path_key] = self.df[path_key]
 
     def make_unzip_me_file(self):
         filename = 'PLEASE_MAKE_SURE_IM_UNZIPPED.txt'

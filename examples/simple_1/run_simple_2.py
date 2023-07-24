@@ -6,6 +6,7 @@ from BokehBioImageDataVis.BokehBioImageDataVis import BokehBioImageDataVis
 data = pd.DataFrame({'x1': [1, 2, 3],
                      'x2': [1, 4, 16],
                      'x3': [1, 8, 64],
+                     'animal': ['cat', 'dog', 'dog'],
                      'path_to_images': ['data/pictures/cat1.jpg',
                                         'data/pictures/dog1.jpg',
                                         'data/pictures/dog2.jpg'],
@@ -15,7 +16,7 @@ data = pd.DataFrame({'x1': [1, 2, 3],
                      })
 
 # create main object
-bokeh_fig = BokehBioImageDataVis(data, output_filename='example_simple_2/vis.html')
+bokeh_fig = BokehBioImageDataVis(data, output_filename='example_simple_2/vis.html', category_key='animal')
 scatter_plot = bokeh_fig.create_scatter_figure()
 
 # create hovers
