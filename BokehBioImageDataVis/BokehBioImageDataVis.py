@@ -194,6 +194,8 @@ class BokehBioImageDataVis:
             self.scatter_figure.legend.location = "bottom_right"
             # change legend background alpha
             self.scatter_figure.legend.background_fill_alpha = 0.5
+            # show the title of the legend
+            self.scatter_figure.legend.title = self.category_key
         elif colorKey and colorLegendKey:
             logging.info(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
             self.scatter_figure.circle('active_axis_x', 'active_axis_y',
