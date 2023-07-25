@@ -4,7 +4,7 @@ from os.path import join
 import pandas as pd
 from bokeh.io import show, output_file
 from bokeh.layouts import column, row
-from bokeh.models import ColumnDataSource, CDSView, Select, CustomJS, Div, HoverTool, LayoutDOM, Slider
+from bokeh.models import ColumnDataSource, CDSView, Select, CustomJS, HoverTool, LayoutDOM, Slider
 from bokeh.palettes import Category10, Category20
 from bokeh.plotting import figure
 import logging
@@ -192,6 +192,8 @@ class BokehBioImageDataVis:
                                        )
             # change legend location to bottom right
             self.scatter_figure.legend.location = "bottom_right"
+            # change legend background alpha
+            self.scatter_figure.legend.background_fill_alpha = 0.5
         elif colorKey and colorLegendKey:
             logging.info(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
             self.scatter_figure.circle('active_axis_x', 'active_axis_y',
