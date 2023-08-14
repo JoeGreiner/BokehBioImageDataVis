@@ -4,6 +4,9 @@ import uuid
 from os import makedirs
 from os.path import split, join, basename, splitext, exists, dirname, normpath
 
+import pandas as pd
+
+
 def create_file(filename, content):
     with open(filename, 'w') as f:
         f.write(content)
@@ -28,6 +31,10 @@ def copy_files_to_output_dir(df, path_key, output_folder, used_paths, copy_files
 
         if src_path == '':
             logging.warning(f'Warning: empty path. Skipping copy.')
+            continue
+
+        if pd.isna(src_path):
+            logging.warning(f'Warning: nan path. Skipping copy.')
             continue
 
         if not exists(src_path):
