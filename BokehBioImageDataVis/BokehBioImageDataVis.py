@@ -286,7 +286,15 @@ class BokehBioImageDataVis:
 
         self.scatter_figure.add_tools(img_hover_tool)
 
-    def add_image_hover(self, key, image_height=300, image_width=300):
+    def add_image_hover(self, key, height=300, width=300, image_width=None, image_height=None):
+        # deprecated: image_width and image_height are not used anymore
+        if image_width is not None:
+            width = image_width
+            logging.warning("image_width is deprecated and not used anymore. Use width instead")
+        if image_height is not None:
+            height = image_height
+            logging.warning("image_height is deprecated and not used anymore. Use height instead")
+
         self.non_data_keys.append(key)
         self.path_keys.append(key)
 
@@ -301,7 +309,7 @@ class BokehBioImageDataVis:
         self.registered_image_elements.append({'id': unique_html_id, 'key': key})
         div_img, callback_img = image_html_and_callback(unique_html_id=unique_html_id,
                                                         df=self.df, key=key,
-                                                        image_height=image_height, image_width=image_width)
+                                                        height=height, width=width)
 
         img_JS_callback = CustomJS(args=dict(source=self.csd_source, div=div_img),
                                    code=callback_img)
@@ -345,7 +353,16 @@ class BokehBioImageDataVis:
         self.manual_id_selection_slider.js_on_change('value', callback)
         return self.manual_id_selection_slider
 
-    def add_video_hover(self, key, video_width=300, video_height=300):
+    def add_video_hover(self, key, width=300, height=300, video_width=None, video_height=None):
+        # deprecated: video_width & video_height, use width & height instead
+        if video_width is not None:
+            width = video_width
+            logging.warning("video_width is deprecated, use width instead")
+        if video_height is not None:
+            logging.warning("video_height is deprecated, use height instead")
+            height = video_height
+
+
         self.non_data_keys.append(key)
         self.path_keys.append(key)
 
@@ -360,7 +377,7 @@ class BokehBioImageDataVis:
         self.registered_video_elements.append({'id': unique_html_id, 'key': key})
         div_video, JS_code = video_html_and_callback(unique_html_id=unique_html_id,
                                                      df=self.df, key=key,
-                                                     video_width=video_width, video_height=video_height)
+                                                     video_width=width, video_height=height)
 
         video_JS_callback = CustomJS(args=dict(source=self.csd_source, div=div_video),
                                      code=JS_code)
@@ -372,13 +389,21 @@ class BokehBioImageDataVis:
 
         return div_video
 
-    def create_hover_text(self, df_keys_to_show=None, container_width=500, container_height=300):
+    def create_hover_text(self, df_keys_to_show=None, width=500, height=300, container_width=None, container_height=None):
+        # deprecated: container_width & container_height, use width & height instead
+        if container_width is not None:
+            width = container_width
+            logging.warning("container_width is deprecated, use width instead")
+        if container_height is not None:
+            logging.warning("container_height is deprecated, use height instead")
+            height = container_height
+
         unique_html_id = uuid.uuid4()
 
         div_text, code_text, js_update_str = text_html_and_callback(unique_id=unique_html_id,
                                                                     df=self.df, df_keys_to_show=df_keys_to_show,
-                                                                    container_width=container_width,
-                                                                    container_height=container_height,
+                                                                    width=width,
+                                                                    height=height,
                                                                     float_precision=self.scatter_data_hover_float_precision)
 
         self.registered_text_elements.append({'id': unique_html_id, 'js_update': js_update_str})

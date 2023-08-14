@@ -1,19 +1,28 @@
+import logging
 import uuid
 
 from bokeh.models import Div
 from pandas.core.dtypes.common import is_float_dtype
 
 
-def image_html_and_callback(unique_html_id, df, key, image_height=None, image_width=None):
+def image_html_and_callback(unique_html_id, df, key, height=None, width=None, image_height=None, image_width=None):
+    # deprecated: image_height and image_width
+    if image_height is not None:
+        logging.warning('Warning: image_height is deprecated. Use height instead.')
+        height = image_height
+    if image_width is not None:
+        logging.warning('Warning: image_width is deprecated. Use width instead.')
+        width = image_width
+
     #  only set image height for now to maintain aspect ratio
     # TODO: make this more flexible
 
-    if image_height is not None:
-        image_height_str = f'height="{image_height}"'
+    if height is not None:
+        image_height_str = f'height="{height}"'
     else:
         image_height_str = ''
-    if image_width is not None:
-        image_width_str = f'width="{image_width}"'
+    if width is not None:
+        image_width_str = f'width="{width}"'
     else:
         image_width_str = ''
 
@@ -24,7 +33,7 @@ def image_html_and_callback(unique_html_id, df, key, image_height=None, image_wi
                 '></img>\n'
                 '')
 
-    div_img = Div(width=image_width, height=image_height, width_policy="fixed",
+    div_img = Div(width=width, height=height, width_policy="fixed",
                   text=html_img)
 
     callback_img = ("const indices = cb_data.index.indices\n"
@@ -36,7 +45,16 @@ def image_html_and_callback(unique_html_id, df, key, image_height=None, image_wi
     return div_img, callback_img
 
 
-def text_html_and_callback(unique_id, df, df_keys_to_show, float_precision, container_width, container_height):
+def text_html_and_callback(unique_id, df, df_keys_to_show, float_precision, width, height,
+                           container_width=None, container_height=None):
+    # deprecated: container_width, container_height
+    if container_width is not None:
+        width = container_width
+        logging.warning("container_width is deprecated. Use width instead.")
+    if container_height is not None:
+        height = container_height
+        logging.warning("container_height is deprecated. Use height instead.")
+
     prefix = ("const indices = cb_data.index.indices;\n"
               "if(indices.length > 0){\n"
               "    const index = indices[0];")
@@ -61,7 +79,7 @@ def text_html_and_callback(unique_id, df, df_keys_to_show, float_precision, cont
     postfix = "}"
 
     callback_text = f'{prefix}\n{combined_str}\n{postfix}'
-    div_text = Div(width=container_width, height=container_height, height_policy="fixed",
+    div_text = Div(width=width, height=height, height_policy="fixed",
                    text=f"<div id='{unique_id}' style='clear:left; float: left; margin: 0px 15px 15px 0px;';></div>")
     return div_text, callback_text, combined_str
 
