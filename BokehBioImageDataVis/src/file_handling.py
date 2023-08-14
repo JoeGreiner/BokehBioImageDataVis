@@ -26,6 +26,10 @@ def get_folder_structure(filepath, copy_files_dir_level):
 def copy_files_to_output_dir(df, path_key, output_folder, used_paths, copy_files_dir_level):
     for src_path in df[path_key].unique():
 
+        if src_path == '':
+            logging.warning(f'Warning: empty path. Skipping copy.')
+            continue
+
         if not exists(src_path):
             logging.warning(f'Warning: {src_path} does not exist. Skipping copy.')
             continue
