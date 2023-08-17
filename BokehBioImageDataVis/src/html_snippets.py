@@ -46,10 +46,12 @@ def image_html_and_callback(unique_html_id, df, key, height=None, width=None, im
     return div_img, callback_img
 
 
-def get_index_0_text(df):
+def get_index_0_text(df, df_keys_to_show):
     row = df.iloc[0]
     lines = []
     for key, value in row.items():
+        if key not in df_keys_to_show:
+            continue
         if key == 'active_axis_x' or key == 'active_axis_y':
             continue
         if pd.api.types.is_float_dtype(value):
@@ -96,7 +98,7 @@ def text_html_and_callback(unique_id, df, df_keys_to_show, float_precision, widt
     postfix = "}"
     callback_text = f'{prefix}\n{combined_str}\n{postfix}'
 
-    index_0_text = get_index_0_text(df)
+    index_0_text = get_index_0_text(df, df_keys_to_show=df_keys_to_show)
 
     div_text = Div(width=width, height=height, height_policy="fixed",
                    text=f"<div id='{unique_id}' style='clear:left; float: left; margin: 0px 15px 15px 0px;';>"
