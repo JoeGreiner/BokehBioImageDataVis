@@ -76,6 +76,10 @@ def text_html_and_callback(unique_id, df, df_keys_to_show, float_precision, widt
     assignment_char = '='
     if df_keys_to_show is None:
         df_keys_to_show = list(df.keys())
+    if df_keys_to_ignore is not None:
+        for key in df_keys_to_ignore:
+            if key in df_keys_to_show:
+                df_keys_to_show.remove(key)
     for key in df_keys_to_show:
         if key == 'active_axis_x' or key == 'active_axis_y':
             continue

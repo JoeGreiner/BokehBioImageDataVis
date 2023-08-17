@@ -25,7 +25,7 @@ img_hover = bokeh_fig.add_image_hover(key='path_to_images', legend_text='An imag
 # underline video
 vid_hover = bokeh_fig.add_video_hover(key='path_to_videos', legend_text='<p>A <span style="text-decoration: underline">video</span> of a cute animal.<p> <p>Very <span style="color:red">cute</span>!</p>') # use <p> for new paragraph
 
-text_hover = bokeh_fig.create_hover_text()
+text_hover = bokeh_fig.create_hover_text(ignore_keys='color_mapping')
 
 id_slider = bokeh_fig.add_slider() # has to be called after adding all other image and video elements!
 legend_button = bokeh_fig.add_legend() # has to be called after adding all other image and video elements!

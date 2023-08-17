@@ -631,7 +631,8 @@ class BokehBioImageDataVis:
 
         return div_video
 
-    def create_hover_text(self, df_keys_to_show=None, width=500, height=300, container_width=None, container_height=None):
+    def create_hover_text(self, df_keys_to_show=None, width=500, height=300, container_width=None, container_height=None,
+                          remove_path_keys=True, ignore_keys=None):
         # deprecated: container_width & container_height, use width & height instead
         if container_width is not None:
             width = container_width
@@ -642,8 +643,21 @@ class BokehBioImageDataVis:
 
         unique_html_id = uuid.uuid4()
 
+        df_keys_to_ignore = None
+        if remove_path_keys:
+            df_keys_to_ignore = self.path_keys
+
+        # TODO: sanity check that keys exist
+        if ignore_keys is not None:
+            # make sure it is a list
+            if isinstance(ignore_keys, str):
+                ignore_keys = [ignore_keys]
+            df_keys_to_ignore += ignore_keys
+
+
         div_text, code_text, js_update_str = text_html_and_callback(unique_id=unique_html_id,
                                                                     df=self.df, df_keys_to_show=df_keys_to_show,
+                                                                    df_keys_to_ignore=df_keys_to_ignore,
                                                                     width=width,
                                                                     height=height,
                                                                     float_precision=self.scatter_data_hover_float_precision)
