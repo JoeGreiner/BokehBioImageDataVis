@@ -59,7 +59,7 @@ def get_index_0_text(df):
     return ''.join(lines)
 
 def text_html_and_callback(unique_id, df, df_keys_to_show, float_precision, width, height,
-                           container_width=None, container_height=None):
+                           container_width=None, container_height=None, df_keys_to_ignore=None):
     # deprecated: container_width, container_height
     if container_width is not None:
         width = container_width

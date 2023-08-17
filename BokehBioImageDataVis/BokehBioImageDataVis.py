@@ -549,7 +549,7 @@ class BokehBioImageDataVis:
             overlayDiv.style.textAlign = 'center';
             overlayDiv.style.fontWeight = 'bold';
             overlayDiv.style.fontFamily = "'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif";  
-            overlayDiv.style.fontSize = '18px';
+            overlayDiv.style.fontSize = '24px';
             overlayDiv.style.backgroundColor = 'rgba(144, 238, 144, {background_alpha})';
             overlayDiv.innerHTML = 'Additional data on selected/hovered-on scatter point.';
             overlayDiv.style.zIndex = 1000;  // Ensure it's on top
