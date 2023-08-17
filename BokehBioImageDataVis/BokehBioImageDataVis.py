@@ -5,11 +5,13 @@ from os.path import join
 import pandas as pd
 from bokeh.io import show, output_file
 from bokeh.layouts import column, row
-from bokeh.models import ColumnDataSource, CDSView, Select, CustomJS, HoverTool, LayoutDOM, Slider, Button
+from bokeh.models import ColumnDataSource, CDSView, Select, CustomJS, HoverTool, LayoutDOM, Slider, Button, Div
 from bokeh.palettes import Category10, Category20
 from bokeh.plotting import figure
 import logging
 
+from BokehBioImageDataVis.src.bokeh_helpers.get_bokeh_images_base64 import get_pan_tool_image, get_rect_zoom_image, \
+    get_mouse_wheel_image, get_reset_image, get_hover_tool_image
 from BokehBioImageDataVis.src.colormapping import random_color
 from BokehBioImageDataVis.src.file_handling import copy_files_to_output_dir, create_file
 from BokehBioImageDataVis.src.html_snippets import image_html_and_callback, text_html_and_callback, \
@@ -286,6 +288,7 @@ class BokehBioImageDataVis:
 
         controls = [self.axesselect_x, self.axesselect_y]
         self.scatterplot_select_options = column(*controls, width=100)
+        self.scatterplot_select_options.css_classes = ["dropdown_controls"]
 
         return row([self.scatterplot_select_options, self.scatter_figure])
 
@@ -357,7 +360,23 @@ class BokehBioImageDataVis:
         return div_img
 
     def add_legend(self, background_alpha=0.75):
-        self.toggleLegendButton = Button(label="Show/Hide Media Legend", button_type="success")
+        toggle_js = """
+        var button = document.querySelector('.highlight-button button');
+        if (button.innerText == "Show Legend") {
+            button.innerText = "Hide Legend";
+            button.classList.remove("bk-btn-success");
+            button.classList.add("bk-btn-warning");
+        } else {
+            button.innerText = "Show Legend";
+            button.classList.remove("bk-btn-warning");
+            button.classList.add("bk-btn-success");
+        }
+        """
+
+        self.toggleLegendButton = Button(label="Show Legend", button_type="success",
+                                         css_classes=["highlight-button"])
+        self.toggleLegendButton.js_on_click(CustomJS(code=toggle_js))
+
 
         ids_of_img = [str(thing['id']) for thing in self.registered_image_elements]
         text_of_img = [thing['legend_text'] for thing in self.registered_image_elements]
@@ -369,14 +388,21 @@ class BokehBioImageDataVis:
         # replace accidentals \n with br
         text = [t.replace('\n', '<br>') for t in text]
 
-        button_code = f"""
-        console.log('button: click!', this.toString());
 
+        legend_scatter = (f'<p>Hover with the mouse over individual scatter points to explore the data.</p>'
+                          f'<p><img src={get_pan_tool_image()}></img> Toggle pan tool.<br> Use left mouse click and drag to pan.</p>'
+                          f'<p><img src={get_rect_zoom_image()}></img> Toggle box zoom tool.<br> Use left mouse click and drag to zoom.</p>'
+                          f'<p><img src={get_mouse_wheel_image()}></img> Toggle wheel zoom tool.<br> Use mouse wheel to zoom.</p>'
+                          f'<p><img src={get_reset_image()}></img> Reset/home plot axes to data.</p>'
+                          f'<p><img src={get_hover_tool_image()}></img>Toggle mouse hover interaction to videos/images.</p>'
+                          )
+
+        button_code = ''
+        button_code_media = f"""
         const imageIds = {ids};
         const texts = {text};
 
         for (let i = 0; i < imageIds.length; i++) {{
-            console.log('button: click!', imageIds[i]);
             const imgElement = document.getElementById(imageIds[i]);
             const parentDiv = imgElement.parentElement;
             if (parentDiv) {{
@@ -387,18 +413,159 @@ class BokehBioImageDataVis:
                 }} else {{
                     // If the overlay text doesn't exist, add it
                     parentDiv.style.position = 'relative';
-                    parentDiv.innerHTML += '<div class="overlay-text" style="position: absolute; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-weight: bold; font-size: 24px; background-color: rgba(255, 255, 255, {background_alpha});">' + texts[i] + '</div>';                }}
+                    const overlayDiv = document.createElement('div');
+                    overlayDiv.className = 'overlay-text';
+                    overlayDiv.style.position = 'absolute';
+                    overlayDiv.style.width = '100%';
+                    overlayDiv.style.height = '100%';
+                    overlayDiv.style.display = 'flex';
+                    overlayDiv.style.flexDirection = 'column';
+                    overlayDiv.style.alignItems = 'center';
+                    overlayDiv.style.justifyContent = 'center';
+                    overlayDiv.style.textAlign = 'center';
+                    overlayDiv.style.fontWeight = 'bold';
+                    overlayDiv.style.fontSize = '22px';
+                    overlayDiv.style.backgroundColor = 'rgba(144, 238, 144, {background_alpha})';
+                    overlayDiv.innerHTML = texts[i];
+                    parentDiv.appendChild(overlayDiv);
+                }}
             }}
         }}
         """
+        button_code_scatter = f"""
+        // code for the scatter plot legend        
+        const canvasElement = document.querySelector('.bk-canvas-events');
+        const parentOfCanvas = canvasElement.parentElement;
+        const overlay = parentOfCanvas.querySelector('.overlay-text');
+        
+        if (overlay) {{
+            overlay.remove();
+        }} else {{
+            const overlayDiv = document.createElement('div');
+            overlayDiv.className = 'overlay-text';
+            overlayDiv.style.pointerEvents = 'none';
+            overlayDiv.style.position = 'absolute';
+            overlayDiv.style.top = '0';
+            overlayDiv.style.left = '0';
+            overlayDiv.style.width = '100%';
+            overlayDiv.style.height = '100%';
+            overlayDiv.style.display = 'flex';
+            overlayDiv.style.flexDirection = 'column';
+            overlayDiv.style.alignItems = 'center';
+            overlayDiv.style.justifyContent = 'center';
+            overlayDiv.style.textAlign = 'center';
+            overlayDiv.style.fontWeight = 'bold';
+            overlayDiv.style.fontSize = '22px';
+            overlayDiv.style.backgroundColor = 'rgba(144, 238, 144, {background_alpha})';
+            overlayDiv.innerHTML = '{legend_scatter}';
+            parentOfCanvas.style.position = 'relative';
+            parentOfCanvas.appendChild(overlayDiv);
+        }}
+        """
 
+        button_code_slider = f"""
+        const sliderElement = document.querySelector('.unique-slider-class');
+        const sliderRect = sliderElement.getBoundingClientRect();
+        const sliderOverlay = document.body.querySelector('.overlay-text-slider');
+
+        if (sliderOverlay) {{
+            sliderOverlay.remove();
+        }} else {{
+            const overlayDiv = document.createElement('div');
+            overlayDiv.className = 'overlay-text-slider';
+            overlayDiv.style.pointerEvents = 'none';
+            overlayDiv.style.position = 'absolute';
+            overlayDiv.style.top = sliderRect.top + 'px';
+            overlayDiv.style.left = sliderRect.left + 'px';
+            overlayDiv.style.width = sliderRect.width + 'px';
+            overlayDiv.style.height = sliderRect.height + 'px';
+            overlayDiv.style.display = 'flex';
+            overlayDiv.style.flexDirection = 'column';
+            overlayDiv.style.alignItems = 'center';
+            overlayDiv.style.justifyContent = 'center';
+            overlayDiv.style.textAlign = 'center';
+            overlayDiv.style.fontWeight = 'inherit';
+            overlayDiv.style.fontFamily = "'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif";  
+            overlayDiv.style.fontSize = '18px';
+            overlayDiv.style.backgroundColor = 'rgba(144, 238, 144, {background_alpha})';
+            overlayDiv.innerHTML = '<b>Id Slider</b>Hint: Click on the slider and use the arrow keys (left/right) explore the data quickly.';
+            overlayDiv.style.zIndex = 1000;  // Ensure it's on top
+            document.body.appendChild(overlayDiv);
+        }}
+        """
+
+
+        button_code_selection = f"""
+        const dropDownElement = document.querySelector('.dropdown_controls');
+        const rect = dropDownElement.getBoundingClientRect();
+        const dropDownOverlay = document.body.querySelector('.overlay-dropdown');
+
+        if (dropDownOverlay) {{
+            dropDownOverlay.remove();
+        }} else {{
+            const overlayDiv = document.createElement('div');
+            overlayDiv.className = 'overlay-dropdown';
+            overlayDiv.style.pointerEvents = 'none';
+            overlayDiv.style.position = 'absolute';
+            overlayDiv.style.top = rect.top + 'px';
+            overlayDiv.style.left = rect.left + 'px';
+            overlayDiv.style.width = rect.width + 'px';
+            overlayDiv.style.height = rect.height + 'px';
+            overlayDiv.style.display = 'flex';
+            overlayDiv.style.flexDirection = 'column';
+            overlayDiv.style.alignItems = 'center';
+            overlayDiv.style.justifyContent = 'center';
+            overlayDiv.style.textAlign = 'center';
+            overlayDiv.style.fontWeight = 'bold';
+            overlayDiv.style.fontFamily = "'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif";  
+            overlayDiv.style.fontSize = '18px';
+            overlayDiv.style.backgroundColor = 'rgba(144, 238, 144, {background_alpha})';
+            overlayDiv.innerHTML = 'Change Axes.';
+            overlayDiv.style.zIndex = 1000;  // Ensure it's on top
+            document.body.appendChild(overlayDiv);
+        }}
+        """
+
+        button_code_text_hover = f"""
+        const textHoverElement = document.querySelector('.text_hover_display');
+        const textHoverRect = textHoverElement.getBoundingClientRect();
+        const textHoverOverlay = document.body.querySelector('.overlay-text-hover');
+
+        if (textHoverOverlay) {{
+            textHoverOverlay.remove();
+        }} else {{
+            const overlayDiv = document.createElement('div');
+            overlayDiv.className = 'overlay-text-hover';
+            overlayDiv.style.pointerEvents = 'none';
+            overlayDiv.style.position = 'absolute';
+            overlayDiv.style.top = textHoverRect.top + 'px';
+            overlayDiv.style.left = textHoverRect.left + 'px';
+            overlayDiv.style.width = textHoverRect.width + 'px';
+            overlayDiv.style.height = textHoverRect.height + 'px';
+            overlayDiv.style.display = 'flex';
+            overlayDiv.style.flexDirection = 'column';
+            overlayDiv.style.alignItems = 'center';
+            overlayDiv.style.justifyContent = 'center';
+            overlayDiv.style.textAlign = 'center';
+            overlayDiv.style.fontWeight = 'bold';
+            overlayDiv.style.fontFamily = "'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif";  
+            overlayDiv.style.fontSize = '18px';
+            overlayDiv.style.backgroundColor = 'rgba(144, 238, 144, {background_alpha})';
+            overlayDiv.innerHTML = 'Additional data on selected/hovered-on scatter point.';
+            overlayDiv.style.zIndex = 1000;  // Ensure it's on top
+            document.body.appendChild(overlayDiv);
+        }}
+        """
+
+        button_code += button_code_media + button_code_scatter + button_code_slider + button_code_selection + button_code_text_hover
         self.toggleLegendButton.js_on_click(CustomJS(code=button_code))
 
         return self.toggleLegendButton
 
     def add_slider(self):
         # prerequisites: all videos/image/text elements have to be registered
-        self.manual_id_selection_slider = Slider(start=0, end=len(self.df) - 1, value=0, step=1, title="Id")
+        self.manual_id_selection_slider = Slider(start=0, end=len(self.df) - 1, value=0, step=1, title="Id", name='id_slider')
+        self.manual_id_selection_slider.css_classes = ["unique-slider-class"]
 
         callback_slider = "const index = manual_id_selection.value;\n"
         for registered_video_element in self.registered_video_elements:
@@ -494,6 +661,9 @@ class BokehBioImageDataVis:
                                                                     width=width,
                                                                     height=height,
                                                                     float_precision=self.scatter_data_hover_float_precision)
+
+        div_text.css_classes = ["text_hover_display"]
+
 
         self.registered_text_elements.append({'id': unique_html_id, 'js_update': js_update_str})
 
