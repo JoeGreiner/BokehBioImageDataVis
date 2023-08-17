@@ -1,6 +1,7 @@
 import logging
 import uuid
 
+import pandas as pd
 from bokeh.models import Div
 from pandas.core.dtypes.common import is_float_dtype
 
@@ -45,6 +46,18 @@ def image_html_and_callback(unique_html_id, df, key, height=None, width=None, im
     return div_img, callback_img
 
 
+def get_index_0_text(df):
+    row = df.iloc[0]
+    lines = []
+    for key, value in row.items():
+        if key == 'active_axis_x' or key == 'active_axis_y':
+            continue
+        if pd.api.types.is_float_dtype(value):
+            lines.append(f"<b>{key}</b>: {value:.2f}<br>")
+        else:
+            lines.append(f"<b>{key}</b>: {value}<br>")
+    return ''.join(lines)
+
 def text_html_and_callback(unique_id, df, df_keys_to_show, float_precision, width, height,
                            container_width=None, container_height=None):
     # deprecated: container_width, container_height
@@ -77,10 +90,14 @@ def text_html_and_callback(unique_id, df, df_keys_to_show, float_precision, widt
         combined_str += line
 
     postfix = "}"
-
     callback_text = f'{prefix}\n{combined_str}\n{postfix}'
+
+    index_0_text = get_index_0_text(df)
+
     div_text = Div(width=width, height=height, height_policy="fixed",
-                   text=f"<div id='{unique_id}' style='clear:left; float: left; margin: 0px 15px 15px 0px;';></div>")
+                   text=f"<div id='{unique_id}' style='clear:left; float: left; margin: 0px 15px 15px 0px;';>"
+                        f"{index_0_text}"
+                        f"</div>")
     return div_text, callback_text, combined_str
 
 
