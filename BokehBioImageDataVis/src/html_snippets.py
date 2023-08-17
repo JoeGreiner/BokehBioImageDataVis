@@ -95,10 +95,12 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
         video_width_str = ''
 
     html_string = (
-        f'<video {video_width_str} {video_height_str} controls autoplay muted loop id="{unique_html_id}" data-value="firstvalue">\n'
-        f'    <source src="{df[key][0]}" type="video/mp4">\n'
-        f'    Your browser does not support the video tag.\n'
-        '</video>\n'
+        f'<div style="position: relative; display: flex; justify-content: center; align-items: center; height: {video_height_str}; width: {video_width_str};">'
+        f'    <video controls autoplay muted loop id="{unique_html_id}" data-value="firstvalue" style="max-height: 100%; max-width: 100%;">'
+        f'        <source src="{df[key][0]}" type="video/mp4">'
+        f'        Your browser does not support the video tag.'
+        '    </video>'
+        '</div>'
         '')
     div_html = Div(width=video_width, width_policy="fixed", height=video_height, text=html_string)
 

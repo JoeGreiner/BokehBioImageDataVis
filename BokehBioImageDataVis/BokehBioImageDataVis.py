@@ -1,10 +1,11 @@
 import os.path
+import shutil
 import uuid
 from os.path import join
 import pandas as pd
 from bokeh.io import show, output_file
 from bokeh.layouts import column, row
-from bokeh.models import ColumnDataSource, CDSView, Select, CustomJS, HoverTool, LayoutDOM, Slider
+from bokeh.models import ColumnDataSource, CDSView, Select, CustomJS, HoverTool, LayoutDOM, Slider, Button
 from bokeh.palettes import Category10, Category20
 from bokeh.plotting import figure
 import logging
@@ -28,8 +29,9 @@ class BokehBioImageDataVis:
                  add_id_to_dataframe=True,
                  do_copy_files_to_output_dir=True,
                  copy_files_dir_level=1,
+                 clearOutputFolderIfNotEmpty=False,
                  output_filename='BokehBioImageDataVis.html',
-                 output_title='BokehBioImageDataVis', ):
+                 output_title=None, ):
         '''
         Initialize the main object, where the data is stored and the scatter plot is created.
         Can be used to create a scatter plot with images and videos as hover.
@@ -47,15 +49,22 @@ class BokehBioImageDataVis:
         :param add_id_to_dataframe: add an id column to the dataframe, which can be used with the slider
         :param do_copy_files_to_output_dir: copy files to output dir, relative paths, to make everything portable
         :param copy_files_dir_level: how many levels of the folder structure should be preserved when copying files
+        :param clearOutputFolderIfNotEmpty: if output folder is not empty, delete contents
         :param output_filename: html output filename
         :param output_title: title of the html output
         '''
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
 
+
+
         self.df = df
         if add_id_to_dataframe:
             logging.info('Adding id column to dataframe')
-            self.df.insert(0, 'id', range(0, len(self.df)))  # can be used with the slider
+            # check if id is already present
+            if 'id' in self.df.columns:
+                logging.warning('Can insert id into dataframe, as it is already present!')
+            else:
+                self.df.insert(0, 'id', range(0, len(self.df)))  # can be used with the slider
 
         if category_key:
             logging.info(f'Category key: {category_key}')
@@ -67,6 +76,29 @@ class BokehBioImageDataVis:
         if self.output_folder == '':
             self.output_folder = '.'  # current folder
         logging.info(f'Output folder: {self.output_folder}')
+
+        self.clearOutputFolderIfNotEmpty = clearOutputFolderIfNotEmpty
+        if self.output_folder != '.':
+            if os.path.exists(self.output_folder):
+                if len(os.listdir(self.output_folder)) > 0:
+                    logging.warning(f'Output folder is not empty: {self.output_folder}')
+                    if self.clearOutputFolderIfNotEmpty:
+                        logging.info('Deleting contents of output folder')
+                        for filename in os.listdir(self.output_folder):
+                            file_path = os.path.join(self.output_folder, filename)
+                            try:
+                                if os.path.isfile(file_path) or os.path.islink(file_path):
+                                    os.unlink(file_path)
+                                elif os.path.isdir(file_path):
+                                    shutil.rmtree(file_path)
+                            except Exception as e:
+                                logging.error('Failed to delete %s. Reason: %s' % (file_path, e))
+                        else:
+                            logging.info('Keeping contents of output folder')
+                else:
+                    logging.info('Output folder is empty')
+            else:
+                logging.info('Output folder does not exist yet')
 
         logging.info(f'Output filename: {output_filename}')
         if not os.path.exists(self.output_folder):
@@ -120,6 +152,9 @@ class BokehBioImageDataVis:
         self.scatter_size = scatter_size
         self.do_scatter_data_hover = do_scatter_data_hover
         self.scatter_data_hover_float_precision = scatter_data_hover_float_precision
+
+        if output_title is None:
+            output_title = os.path.splitext(os.path.basename(output_filename))[0]
 
         output_file(output_filename, title=output_title, mode="inline")
 
@@ -286,7 +321,7 @@ class BokehBioImageDataVis:
 
         self.scatter_figure.add_tools(img_hover_tool)
 
-    def add_image_hover(self, key, height=300, width=300, image_width=None, image_height=None):
+    def add_image_hover(self, key, height=300, width=300, image_width=None, image_height=None, legend_text="",):
         # deprecated: image_width and image_height are not used anymore
         if image_width is not None:
             width = image_width
@@ -306,7 +341,7 @@ class BokehBioImageDataVis:
             self.csd_source.data[key] = self.df[key]
 
         unique_html_id = uuid.uuid4()
-        self.registered_image_elements.append({'id': unique_html_id, 'key': key})
+        self.registered_image_elements.append({'id': unique_html_id, 'key': key, 'legend_text': legend_text})
         div_img, callback_img = image_html_and_callback(unique_html_id=unique_html_id,
                                                         df=self.df, key=key,
                                                         height=height, width=width)
@@ -320,6 +355,46 @@ class BokehBioImageDataVis:
         self.scatter_figure.add_tools(img_hover_tool)
 
         return div_img
+
+    def add_legend(self, background_alpha=0.75):
+        self.toggleLegendButton = Button(label="Show/Hide Media Legend", button_type="success")
+
+        ids_of_img = [str(thing['id']) for thing in self.registered_image_elements]
+        text_of_img = [thing['legend_text'] for thing in self.registered_image_elements]
+        ids_of_vids = [str(thing['id']) for thing in self.registered_video_elements]
+        text_of_vids = [thing['legend_text'] for thing in self.registered_video_elements]
+        ids = ids_of_img + ids_of_vids
+        text = text_of_img + text_of_vids
+
+        # replace accidentals \n with br
+        text = [t.replace('\n', '<br>') for t in text]
+
+        button_code = f"""
+        console.log('button: click!', this.toString());
+
+        const imageIds = {ids};
+        const texts = {text};
+
+        for (let i = 0; i < imageIds.length; i++) {{
+            console.log('button: click!', imageIds[i]);
+            const imgElement = document.getElementById(imageIds[i]);
+            const parentDiv = imgElement.parentElement;
+            if (parentDiv) {{
+                const overlayText = parentDiv.querySelector('.overlay-text');
+                if (overlayText) {{
+                    // If the overlay text exists, remove it
+                    overlayText.remove();
+                }} else {{
+                    // If the overlay text doesn't exist, add it
+                    parentDiv.style.position = 'relative';
+                    parentDiv.innerHTML += '<div class="overlay-text" style="position: absolute; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-weight: bold; font-size: 24px; background-color: rgba(255, 255, 255, {background_alpha});">' + texts[i] + '</div>';                }}
+            }}
+        }}
+        """
+
+        self.toggleLegendButton.js_on_click(CustomJS(code=button_code))
+
+        return self.toggleLegendButton
 
     def add_slider(self):
         # prerequisites: all videos/image/text elements have to be registered
@@ -353,7 +428,7 @@ class BokehBioImageDataVis:
         self.manual_id_selection_slider.js_on_change('value', callback)
         return self.manual_id_selection_slider
 
-    def add_video_hover(self, key, width=300, height=300, video_width=None, video_height=None):
+    def add_video_hover(self, key, width=300, height=300, video_width=None, video_height=None, legend_text=""):
         # deprecated: video_width & video_height, use width & height instead
         if video_width is not None:
             width = video_width
@@ -374,7 +449,7 @@ class BokehBioImageDataVis:
             self.csd_source.data[key] = self.df[key]
 
         unique_html_id = uuid.uuid4()
-        self.registered_video_elements.append({'id': unique_html_id, 'key': key})
+        self.registered_video_elements.append({'id': unique_html_id, 'key': key, 'legend_text': legend_text})
         div_video, JS_code = video_html_and_callback(unique_html_id=unique_html_id,
                                                      df=self.df, key=key,
                                                      video_width=width, video_height=height)
