@@ -360,22 +360,8 @@ class BokehBioImageDataVis:
         return div_img
 
     def add_toggle_video_button(self):
-        self.toggleVideoButton = Button(label="Pause Videos", button_type="success",
+        self.toggleVideoButton = Button(label="Toggle Pause/Play Videos", button_type="success",
                                          css_classes=["video-toggle-button"])
-        toggle_video_js = """
-        var button = document.querySelector('.video-toggle-button button');
-        if (button.innerText == "Pause Videos") {
-            button.innerText = "Resume Videos";
-            button.classList.remove("bk-btn-success");
-            button.classList.add("bk-btn-warning");
-        } else {
-            button.innerText = "Pause Videos";
-            button.classList.remove("bk-btn-warning");
-            button.classList.add("bk-btn-success");
-        }
-        """
-        self.toggleVideoButton.js_on_click(CustomJS(code=toggle_video_js))
-
         button_code_video = """
         var videos = document.getElementsByTagName('video');
         console.log(videos);
