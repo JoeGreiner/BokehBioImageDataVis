@@ -29,11 +29,11 @@ text_hover = bokeh_fig.create_hover_text(ignore_keys='color_mapping')
 
 id_slider = bokeh_fig.add_slider() # has to be called after adding all other image and video elements!
 legend_button = bokeh_fig.add_legend() # has to be called after adding all other image and video elements!
-
+video_toggle_button = bokeh_fig.add_toggle_video_button()
 # compose figure
 bokeh_fig.show_bokeh(
     row([
-        column([legend_button, id_slider, scatter_plot, text_hover]),
+        column([row([legend_button,video_toggle_button]), id_slider, scatter_plot, text_hover]),
         column([img_hover, vid_hover]),
 
     ])
