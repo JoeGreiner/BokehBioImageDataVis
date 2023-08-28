@@ -1,6 +1,7 @@
 import os.path
 import shutil
 import uuid
+import warnings
 from os.path import join
 import pandas as pd
 from bokeh.io import show, output_file
@@ -583,6 +584,10 @@ class BokehBioImageDataVis:
 
     def add_slider(self):
         # prerequisites: all videos/image/text elements have to be registered
+        if len(self.df) == 1:
+            warnings.warn("Warning: only one data point, slider will not be shown.")
+            # return dummywidget
+            return Div(text="")
         self.manual_id_selection_slider = Slider(start=0, end=len(self.df) - 1, value=0, step=1, title="Id", name='id_slider')
         self.manual_id_selection_slider.css_classes = ["unique-slider-class"]
 
