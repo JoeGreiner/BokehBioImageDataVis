@@ -33,6 +33,7 @@ class BokehBioImageDataVis:
                  do_copy_files_to_output_dir=True,
                  copy_files_dir_level=1,
                  clearOutputFolderIfNotEmpty=False,
+                 legend_position = "bottom_right",
                  output_filename='BokehBioImageDataVis.html',
                  output_title=None, ):
         '''
@@ -74,6 +75,10 @@ class BokehBioImageDataVis:
             self.category_key = category_key
         else:
             self.category_key = None
+        self.legend_position =  legend_position
+        allowed_positions = ['bottom_right', 'bottom_left', 'top_left', 'top_right']
+        assert self.legend_position in allowed_positions, (f'legend position must be in {allowed_positions}, got'
+                                                           f'{self.legend_position}')
 
         self.output_folder = os.path.dirname(output_filename)
         if self.output_folder == '':
@@ -229,7 +234,7 @@ class BokehBioImageDataVis:
                                        color='color_mapping', legend_group=self.category_key, name='main_graph'
                                        )
             # change legend location to bottom right
-            self.scatter_figure.legend.location = "bottom_right"
+            self.scatter_figure.legend.location = self.legend_position
             # change legend background alpha
             self.scatter_figure.legend.background_fill_alpha = 0.5
             # show the title of the legend
