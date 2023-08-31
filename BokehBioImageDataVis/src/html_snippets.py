@@ -5,6 +5,8 @@ import pandas as pd
 from bokeh.models import Div
 from pandas.core.dtypes.common import is_float_dtype
 
+from BokehBioImageDataVis.src.utils import detect_if_key_is_numeric, detect_if_key_is_float
+
 
 def image_html_and_callback(unique_html_id, df, key, height=None, width=None, image_height=None, image_width=None):
     # deprecated: image_height and image_width
@@ -90,7 +92,7 @@ def text_html_and_callback(unique_id, df, df_keys_to_show, float_precision, widt
             continue
         #         # there is an problem sometimes with identifying floats.
         #         # saving and reloading a dataframe fixes this, but this also should deal with most cases
-        if is_float_dtype(df[key]) or isinstance(df[key][0], float):
+        if detect_if_key_is_float(df, key):
             line = f'    document.getElementById("{unique_id}").innerHTML {assignment_char} ' \
                    f'"<b>{key}</b>:" + " " + source.data["{key}"][index]' \
                    f'.toFixed({float_precision}).toString() + "<br>";\n'
