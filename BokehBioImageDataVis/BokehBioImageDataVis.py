@@ -330,7 +330,8 @@ class BokehBioImageDataVis:
 
         self.scatter_figure.add_tools(img_hover_tool)
 
-    def add_image_hover(self, key, height=300, width=300, image_width=None, image_height=None, legend_text="",):
+    def add_image_hover(self, key, height=300, width=300, image_width=None, image_height=None, legend_text="",
+                        title=None):
         # deprecated: image_width and image_height are not used anymore
         if image_width is not None:
             width = image_width
@@ -353,7 +354,8 @@ class BokehBioImageDataVis:
         self.registered_image_elements.append({'id': unique_html_id, 'key': key, 'legend_text': legend_text})
         div_img, callback_img = image_html_and_callback(unique_html_id=unique_html_id,
                                                         df=self.df, key=key,
-                                                        height=height, width=width)
+                                                        height=height, width=width,
+                                                        title=title)
 
         img_JS_callback = CustomJS(args=dict(source=self.csd_source, div=div_img),
                                    code=callback_img)
@@ -624,7 +626,8 @@ class BokehBioImageDataVis:
         self.manual_id_selection_slider.js_on_change('value', callback)
         return self.manual_id_selection_slider
 
-    def add_video_hover(self, key, width=300, height=300, video_width=None, video_height=None, legend_text=""):
+    def add_video_hover(self, key, width=300, height=300, video_width=None, video_height=None, legend_text="",
+                        title=None):
         # deprecated: video_width & video_height, use width & height instead
         if video_width is not None:
             width = video_width
@@ -648,7 +651,8 @@ class BokehBioImageDataVis:
         self.registered_video_elements.append({'id': unique_html_id, 'key': key, 'legend_text': legend_text})
         div_video, JS_code = video_html_and_callback(unique_html_id=unique_html_id,
                                                      df=self.df, key=key,
-                                                     video_width=width, video_height=height)
+                                                     video_width=width, video_height=height,
+                                                     title=title)
 
         video_JS_callback = CustomJS(args=dict(source=self.csd_source, div=div_video),
                                      code=JS_code)

@@ -8,7 +8,8 @@ from pandas.core.dtypes.common import is_float_dtype
 from BokehBioImageDataVis.src.utils import detect_if_key_is_numeric, detect_if_key_is_float
 
 
-def image_html_and_callback(unique_html_id, df, key, height=None, width=None, image_height=None, image_width=None):
+def image_html_and_callback(unique_html_id, df, key, height=None, width=None, image_height=None, image_width=None,
+                            title=None, margin_title=5):
     # deprecated: image_height and image_width
     if image_height is not None:
         logging.warning('Warning: image_height is deprecated. Use height instead.')
@@ -20,8 +21,6 @@ def image_html_and_callback(unique_html_id, df, key, height=None, width=None, im
     #  only set image height for now to maintain aspect ratio
     # TODO: make this more flexible
 
-
-
     if height is not None:
         image_height_str = f'height:{height}px;'
     else:
@@ -31,11 +30,19 @@ def image_html_and_callback(unique_html_id, df, key, height=None, width=None, im
     else:
         image_width_str = ''
 
-    html_img = (f'<div style="position: relative; display: flex; justify-content: center; align-items: center; {image_height_str} {image_width_str}">\n'
+    if title is not None:
+        title_html = f'<div style="text-align: center; margin-bottom: {margin_title}px; font-weight: bold;">\n' \
+                     f'    <span>{title}</span>\n' \
+                     f'</div>'
+    else:
+        title_html = ''
+
+    html_img = (f'<div style="position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; {image_height_str} {image_width_str}">\n'
+                f'{title_html}'
                 f'  <img\n'
                 f'    src="{df[key][0]}"\n'
                 f'    id="{unique_html_id}"\n'
-                '    style="width: 100%; max-height: 100%; margin: 0px 15px 15px 0px;"\n'
+                '    style="width: 100%; max-height: 100%; margin: 0px 15px 15px 0px; object-fit: contain"\n'
                 '   ></img>\n'
                 '</div>')
 
@@ -117,7 +124,8 @@ def text_html_and_callback(unique_id, df, df_keys_to_show, float_precision, widt
     return div_text, callback_text, combined_str
 
 
-def video_html_and_callback(unique_html_id, df, key, video_height=None, video_width=None, allow_zoom=False):
+def video_html_and_callback(unique_html_id, df, key, video_height=None, video_width=None, title=None,
+                            margin_title=5):
     if video_height is not None:
         video_height_str = f'height:{video_height}px;'
     else:
@@ -127,10 +135,19 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
     else:
         video_width_str = ''
 
+    if title is not None:
+        title_html = f'    <div style="text-align: center; margin-bottom: {margin_title}px; font-weight: bold;">\n' \
+                     f'        <span>{title}</span>\n' \
+                     f'    </div>'
+    else:
+        title_html = ''
+
+
 
     html_string = (
-        f'<div style="position: relative; display: flex; justify-content: center; align-items: center; {video_height_str} {video_width_str}">'
-        f'    <video controls autoplay muted loop id="{unique_html_id}" data-value="firstvalue" style="width: 100%; max-height: 100%">'
+        f'<div style="position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; {video_height_str} {video_width_str}">'
+        f'{title_html}'
+        f'    <video controls autoplay muted loop id="{unique_html_id}" data-value="firstvalue" style="width: 100%; max-height: 100%; object-fit: contain">'
         f'        <source src="{df[key][0]}" type="video/mp4">'
         f'        Your browser does not support the video tag.'
         '    </video>'
