@@ -20,21 +20,24 @@ def image_html_and_callback(unique_html_id, df, key, height=None, width=None, im
     #  only set image height for now to maintain aspect ratio
     # TODO: make this more flexible
 
+
+
     if height is not None:
-        image_height_str = f'height="{height}"'
+        image_height_str = f'height:{height}px;'
     else:
         image_height_str = ''
     if width is not None:
-        image_width_str = f'width="{width}"'
+        image_width_str = f'width:{width}px;'
     else:
         image_width_str = ''
 
-    html_img = (f'<img\n'
-                f'    src="{df[key][0]}" {image_height_str}\n'
+    html_img = (f'<div style="position: relative; display: flex; justify-content: center; align-items: center; {image_height_str} {image_width_str}">\n'
+                f'  <img\n'
+                f'    src="{df[key][0]}"\n'
                 f'    id="{unique_html_id}"\n'
-                '    style="float: left; margin: 0px 15px 15px 0px;"\n'
-                '></img>\n'
-                '')
+                '    style="width: 100%; max-height: 100%; margin: 0px 15px 15px 0px;"\n'
+                '   ></img>\n'
+                '</div>')
 
     div_img = Div(width=width, height=height, width_policy="fixed",
                   text=html_img)
@@ -114,19 +117,20 @@ def text_html_and_callback(unique_id, df, df_keys_to_show, float_precision, widt
     return div_text, callback_text, combined_str
 
 
-def video_html_and_callback(unique_html_id, df, key, video_height=None, video_width=None):
+def video_html_and_callback(unique_html_id, df, key, video_height=None, video_width=None, allow_zoom=False):
     if video_height is not None:
-        video_height_str = f'height="{video_height}"'
+        video_height_str = f'height:{video_height}px;'
     else:
         video_height_str = ''
     if video_width is not None:
-        video_width_str = f'width="{video_width}"'
+        video_width_str = f'width:{video_width}px;'
     else:
         video_width_str = ''
 
+
     html_string = (
-        f'<div style="position: relative; display: flex; justify-content: center; align-items: center; height: {video_height_str}; width: {video_width_str};">'
-        f'    <video controls autoplay muted loop id="{unique_html_id}" data-value="firstvalue" style="max-height: 100%; max-width: 100%;">'
+        f'<div style="position: relative; display: flex; justify-content: center; align-items: center; {video_height_str} {video_width_str}">'
+        f'    <video controls autoplay muted loop id="{unique_html_id}" data-value="firstvalue" style="width: 100%; max-height: 100%">'
         f'        <source src="{df[key][0]}" type="video/mp4">'
         f'        Your browser does not support the video tag.'
         '    </video>'
