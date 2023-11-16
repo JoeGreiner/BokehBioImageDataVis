@@ -20,8 +20,8 @@ bokeh_fig = BokehBioImageDataVis(data, output_filename='example_simple_2/vis.htm
 scatter_plot = bokeh_fig.create_scatter_figure()
 
 # create hovers
-img_hover = bokeh_fig.add_image_hover(key='path_to_images', title='animal picture')
-vid_hover = bokeh_fig.add_video_hover(key='path_to_videos', title='animal video')
+img_hover = bokeh_fig.add_image_hover(key='path_to_images')
+vid_hover = bokeh_fig.add_video_hover(key='path_to_videos', autoplay=False)
 
 text_hover = bokeh_fig.create_hover_text()
 

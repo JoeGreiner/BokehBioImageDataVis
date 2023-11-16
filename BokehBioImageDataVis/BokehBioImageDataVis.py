@@ -627,7 +627,7 @@ class BokehBioImageDataVis:
         return self.manual_id_selection_slider
 
     def add_video_hover(self, key, width=300, height=300, video_width=None, video_height=None, legend_text="",
-                        title=None):
+                        title=None, autoplay=True):
         # deprecated: video_width & video_height, use width & height instead
         if video_width is not None:
             width = video_width
@@ -652,7 +652,7 @@ class BokehBioImageDataVis:
         div_video, JS_code = video_html_and_callback(unique_html_id=unique_html_id,
                                                      df=self.df, key=key,
                                                      video_width=width, video_height=height,
-                                                     title=title)
+                                                     title=title, autoplay=autoplay)
 
         video_JS_callback = CustomJS(args=dict(source=self.csd_source, div=div_video),
                                      code=JS_code)

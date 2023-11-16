@@ -125,7 +125,7 @@ def text_html_and_callback(unique_id, df, df_keys_to_show, float_precision, widt
 
 
 def video_html_and_callback(unique_html_id, df, key, video_height=None, video_width=None, title=None,
-                            margin_title=5):
+                            margin_title=5, autoplay=True):
     if video_height is not None:
         video_height_str = f'height:{video_height}px;'
     else:
@@ -142,12 +142,17 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
     else:
         title_html = ''
 
+    if autoplay is not None:
+        if autoplay:
+            autoplay = 'autoplay '
+        else:
+            autoplay = ''
 
 
     html_string = (
         f'<div style="position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; {video_height_str} {video_width_str}">'
         f'{title_html}'
-        f'    <video controls autoplay muted loop id="{unique_html_id}" data-value="firstvalue" style="width: 100%; max-height: 100%; object-fit: contain">'
+        f'    <video controls {autoplay}muted loop id="{unique_html_id}" data-value="firstvalue" style="width: 100%; max-height: 100%; object-fit: contain">'
         f'        <source src="{df[key][0]}" type="video/mp4">'
         f'        Your browser does not support the video tag.'
         '    </video>'
