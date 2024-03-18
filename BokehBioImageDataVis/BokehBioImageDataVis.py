@@ -206,8 +206,8 @@ class BokehBioImageDataVis:
         self.csd_view = CDSView(source=self.csd_source)
 
     def initialize_highlighter(self, init_index=0):
-        self.highlight_df = pd.DataFrame({'highlight_x': [self.df['active_axis_x'][init_index]],
-                                          'highlight_y': [self.df['active_axis_y'][init_index]],
+        self.highlight_df = pd.DataFrame({'highlight_x': [self.df['active_axis_x'].iloc[init_index]],
+                                          'highlight_y': [self.df['active_axis_y'].iloc[init_index]],
                                           'last_selected_index': [0]})
 
         self.highlight_csd_source = ColumnDataSource(data=self.highlight_df)

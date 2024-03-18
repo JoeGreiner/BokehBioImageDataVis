@@ -10,7 +10,7 @@ def detect_if_key_is_numeric(df, key):
         return True
     # there is an problem sometimes with identifying numeric dtypes.
     # saving and reloading a dataframe fixes this, but this also should deal with most cases
-    elif isinstance(df[key][0], float):
+    elif isinstance(df[key].iloc[0], float):
         # nan can also be dealt as float
         # check if there is a nan in the column, if so, trust the original numeric dtype detection
         if not df[key].isnull().values.any():
