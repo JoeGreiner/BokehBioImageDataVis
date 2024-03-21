@@ -363,7 +363,7 @@ class BokehBioImageDataVis:
         for path_img in self.df[key]:
             if not os.path.exists(join(self.output_folder, path_img)):
                 logging.warning(f'Path {path_img} does not exist. Replacing with data missing image.')
-                self.df[key] = self.df[key].replace(path_img, 'data/data_missing.png')
+                self.df[key] = self.df[key].replace(path_img, f'data/{missing_data_icon}')
         self.csd_source.data[key] = self.df[key]
 
         unique_html_id = uuid.uuid4()
@@ -662,6 +662,23 @@ class BokehBioImageDataVis:
                                                                 used_paths=self.used_paths,
                                                                 copy_files_dir_level=self.copy_files_dir_level)
             self.csd_source.data[key] = self.df[key]
+
+
+        # check if paths exist, if not, copy 'data missing video' and point towards it
+        # this is necessary because some browser do funky stuff
+        missing_data_mp4 = 'data_missing.mp4'
+        output_path_missing = join(self.output_folder, 'data', missing_data_mp4)
+        if not os.path.exists(os.path.dirname(output_path_missing)):
+            os.makedirs(os.path.dirname(output_path_missing))
+        # copy the data missing image to the output folder
+        if not os.path.exists(output_path_missing):
+            shutil.copyfile(join(os.path.dirname(__file__), 'resources', 'MissingDataVideo.mp4'), output_path_missing)
+
+        for path_video in self.df[key]:
+            if not os.path.exists(join(self.output_folder, path_video)):
+                logging.warning(f'Path {path_video} does not exist. Replacing with data missing video.')
+                self.df[key] = self.df[key].replace(path_video, f'data/{missing_data_mp4}')
+        self.csd_source.data[key] = self.df[key]
 
         unique_html_id = uuid.uuid4()
         self.registered_video_elements.append({'id': unique_html_id, 'key': key, 'legend_text': legend_text})
