@@ -350,6 +350,22 @@ class BokehBioImageDataVis:
                                                                 copy_files_dir_level=self.copy_files_dir_level)
             self.csd_source.data[key] = self.df[key]
 
+        # check if paths exist, if not, copy 'data missing image' and point towards it
+        # this is necessary because some browser do not show the broken image symbol, but display the last working image
+        missing_data_icon = 'data_missing.png'
+        output_path_missing = join(self.output_folder, 'data', missing_data_icon)
+        if not os.path.exists(os.path.dirname(output_path_missing)):
+            os.makedirs(os.path.dirname(output_path_missing))
+        # copy the data missing image to the output folder
+        if not os.path.exists(output_path_missing):
+            shutil.copyfile(join(os.path.dirname(__file__), 'resources', 'MissingDataIcon.png'), output_path_missing)
+
+        for path_img in self.df[key]:
+            if not os.path.exists(join(self.output_folder, path_img)):
+                logging.warning(f'Path {path_img} does not exist. Replacing with data missing image.')
+                self.df[key] = self.df[key].replace(path_img, 'data/data_missing.png')
+        self.csd_source.data[key] = self.df[key]
+
         unique_html_id = uuid.uuid4()
         self.registered_image_elements.append({'id': unique_html_id, 'key': key, 'legend_text': legend_text})
         div_img, callback_img = image_html_and_callback(unique_html_id=unique_html_id,
