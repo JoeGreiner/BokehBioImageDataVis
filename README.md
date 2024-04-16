@@ -9,7 +9,13 @@ BokehBioImageDataVis is a simple but very effective extension of the Bokeh visua
   <em>Interactive scatterplot visualization from BokehBioImageDataVis demonstrating cardiomyocyte organelle segmentation.</em>
 </p>
 
-## Setup
+## 🏠 Table of Contents
+
+* [Setup](#setup-)
+* [Basic Use](#basic-use-)
+* [Frequently Asked Questions (FAQ)](#faq-)
+
+## Setup [🏠](#-table-of-contents)
 
 0. Optional: Create a conda environment and activate it. 
 ```bash
@@ -21,7 +27,7 @@ conda activate bokeh_vis
 pip install git+https://github.com/JoeGreiner/BokehBioImageDataVis.git
 ```
 
-## Basic Use
+## Basic Use [🏠](#-table-of-contents)
 ### Code
 0. Define dataframe with numeric data (x1, x2, x3) and media data paths. The paths can be relative or absolute, but have to link to existing files. If they link to non-existing files, a 'missing data' image will be displayed. In a real-world scenario, you would load your experimental results, and construct matching paths for each datapoint. Media (plots, figures, images, 3D renders, ...) need to be generated previously.
  
@@ -76,7 +82,7 @@ Running the code should open the website shown below. If the website does not au
   <em>Expected outcome of the basic usage example.</em>
 </p>
 
-## FAQ
+## FAQ [🏠](#-table-of-contents)
 
 * How do I generate (automated) visualisations?
 
