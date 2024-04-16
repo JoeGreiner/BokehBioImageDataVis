@@ -37,8 +37,7 @@ data = pd.DataFrame({'x1': [1, 2, 3],
                                         'data/videos/dog2.mp4']
                      })
 
-
-# helper function that downloads example files and put them at 'data/pictures' and 'data/videos'
+# helper function that downloads example files
 from BokehBioImageDataVis.src.utils import download_files_simple_example_1
 download_files_simple_example_1()
 ```
@@ -51,7 +50,6 @@ scatter_plot = bokeh_fig.create_scatter_figure()
 
 2. Create image and video elements, and link them to the paths in the DataFrame by specifying their keys. Additionally, create a text element, that will display all available data for each datapoint in textform.
 ```python
-# step 2: create hover objects by linking them to the dataframe
 img_hover = bokeh_fig.add_image_hover(key='path_to_images')
 vid_hover = bokeh_fig.add_video_hover(key='path_to_videos')
 text_hover = bokeh_fig.create_hover_text()
@@ -69,7 +67,7 @@ bokeh_fig.show_bokeh(
 )
 ```
 ### Expected Results
-Running the code should open the website shown below. If the website does not automatically open, navigate to the output directory (here: 'example_simple_1', and open the website (here: 'vis.html')
+Running the code should open the website shown below. If the website does not automatically open, navigate to the output directory (here: 'example_simple_1', and open the website (here: 'vis.html'). The resulted website is portable, i.e., you can share them with others by sending around the output folder (you probably want to create an archive/zip to do so).
 
 <p align="center">
   <img src="https://github.com/JoeGreiner/BokehBioImageDataVis/assets/24453528/93612315-b19b-4ac2-b58c-74172231bc05" alt="bokeh">
@@ -86,3 +84,11 @@ This depends really on what you want to visualise, for many applications, matplo
 * I get 'missing data' symbols in my visualisation. Why?
 
 The paths that you have specified do not exist, and therefore can't be linked. Make sure that the paths are correct. It does not matter if you use relative or absolute paths, the framework will copy all media to the output directory next to the website and link them relatively, so that the output folder can be moved to other computers with the links still working.
+
+* How do I share a website?
+
+Just share the whole output folder - the website will work seamlessly on different locations. Alternatively, you can also host the website online.
+
+* I've shared the website with a collaborator, however, he doesn't see any media elements. Why?
+
+I've realised that occacionally, when I send collaborators a visualisation as an archive, they don't unzip/extract the archive, but try to run the website from within the archive. Doing so will not show any media elements, as the paths are incorrect. If you send an archive/zip, people need to extract/unarchive the folder first before visiting the website.
