@@ -2,6 +2,9 @@ import pandas as pd
 from bokeh.layouts import column, row
 
 from BokehBioImageDataVis.BokehBioImageDataVis import BokehBioImageDataVis
+from BokehBioImageDataVis.src.utils import download_files_simple_example_1
+
+download_files_simple_example_1()
 
 data = pd.DataFrame({'x1': [1, 2, 3],
                      'x2': [1, 4, 16],
