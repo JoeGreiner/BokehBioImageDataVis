@@ -71,6 +71,12 @@ bokeh_fig.show_bokeh(
 ### Expected Results
 Running the code should open the website shown below. If the website does not automatically open, navigate to the output directory (here: 'example_simple_1', and open the website (here: 'vis.html')
 
+<p align="center">
+  <img src="https://github.com/JoeGreiner/BokehBioImageDataVis/assets/24453528/93612315-b19b-4ac2-b58c-74172231bc05" alt="bokeh">
+  <br>
+  <em>Expected outcome of the basic usage example.</em>
+</p>
+
 ## FAQ
 
 * How do I generate (automated) visualisations?
