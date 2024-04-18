@@ -38,26 +38,23 @@ def download_files_simple_example_1():
 
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
-    logging.info('downloading files for simple example 1')
+    if not os.path.exists('data'):
+        os.makedirs('data')
+        logging.info('downloading files for simple example 1')
+        url = 'http://joegreiner.de/assets/examples_bokehvis/data.zip'
+        r = requests.get(url, allow_redirects=True)
+        # write to file
+        open('example_data.zip', 'wb').write(r.content)
+        logging.info('downloads for simple example 1 done')
 
-    # save them to data/videos and data/pictures
-    os.makedirs('data/videos', exist_ok=True)
-    os.makedirs('data/pictures', exist_ok=True)
-    picture_files = ['cat1.jpg', 'dog1.jpg', 'dog2.jpg']
-    video_files = ['cat1.mp4', 'dog1.mp4', 'dog2.mp4']
-    for file in picture_files:
-        if not os.path.exists(f'data/pictures/{file}'):
-            logging.info(f'downloading {file}')
-            url = f'https://raw.githubusercontent.com/JoeGreiner/BokehBioImageDataVis/main/examples/simple_1/data/pictures/{file}'
-            r = requests.get(url, allow_redirects=True)
-            open(f'data/pictures/{file}', 'wb').write(r.content)
-    for file in video_files:
-        if not os.path.exists(f'data/videos/{file}'):
-            logging.info(f'downloading {file}')
-            url = f'https://raw.githubusercontent.com/JoeGreiner/BokehBioImageDataVis/main/examples/simple_1/data/videos/{file}'
-            r = requests.get(url, allow_redirects=True)
-            open(f'data/videos/{file}', 'wb').write(r.content)
-    logging.info('downloads for simple example 1 done')
+        # unzip
+        logging.info('unzipping files')
+        import zipfile
+        with zipfile.ZipFile('example_data.zip', 'r') as zip_ref:
+            zip_ref.extractall()
+        logging.info('unzipping done')
+    else:
+        logging.info('data folder already exists, not downloading files')
 
 
 
