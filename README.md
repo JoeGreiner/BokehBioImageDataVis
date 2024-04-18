@@ -13,6 +13,7 @@ BokehBioImageDataVis is a simple but very effective extension of the Bokeh visua
 
 * [Setup](#setup-)
 * [Basic Use](#basic-use-)
+* [Additional Features](#additional-features-)
 * [Frequently Asked Questions (FAQ)](#faq-)
 
 ## Setup [🏠](#-table-of-contents)
