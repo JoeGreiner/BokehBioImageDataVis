@@ -53,7 +53,7 @@ download_files_simple_example_1()
 ```python
 from BokehBioImageDataVis.BokehBioImageDataVis import BokehBioImageDataVis
 
-bokeh_fig = BokehBioImageDataVis(data, output_filename='example_simple_1/vis.html')
+bokeh_fig = BokehBioImageDataVis(data, output_filename='example_0_basic_use/vis.html')
 scatter_plot = bokeh_fig.create_scatter_figure()
 ```
 
