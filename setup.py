@@ -11,4 +11,7 @@ setup(name='BokehBioImageDataVis',
       install_requires=[
           'bokeh<3', 'pandas', 'numpy', 'requests'
       ],
+      package_data={
+        'BokehBioImageDataVis': ['resources/*.png', 'resources/*.mp4']
+        },
       zip_safe=False)
