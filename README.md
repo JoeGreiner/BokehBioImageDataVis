@@ -18,19 +18,19 @@ BokehBioImageDataVis is a simple but very effective extension of the Bokeh visua
 
 ## Setup [🏠](#-table-of-contents)
 
-0. Optional: Create a conda environment and activate it. 
+1. Optional: Create a conda environment and activate it. 
 ```bash
 conda create --name bokeh_vis python=3.9
 conda activate bokeh_vis
 ```
-1. Install BokehBioImageDataVis using pip.
+2. Install BokehBioImageDataVis using pip.
 ```bash
 pip install git+https://github.com/JoeGreiner/BokehBioImageDataVis.git
 ```
 
 ## Basic Use [🏠](#-table-of-contents)
 ### Code (see examples/0_basic_use.py)
-0. Define dataframe with numeric data (x1, x2, x3) and media data paths. The paths can be relative or absolute, but have to link to existing files. If they link to non-existing files, a 'missing data' image will be displayed. In a real-world scenario, you would load your experimental results, and construct matching paths for each datapoint. Media (plots, figures, images, 3D renders, ...) need to be generated previously.
+1. Define dataframe with numeric data (x1, x2, x3) and media data paths. The paths can be relative or absolute, but have to link to existing files. If they link to non-existing files, a 'missing data' image will be displayed. In a real-world scenario, you would load your experimental results, and construct matching paths for each datapoint. Media (plots, figures, images, 3D renders, ...) need to be generated previously.
  
 ```python
 import pandas as pd
@@ -50,7 +50,7 @@ from BokehBioImageDataVis.src.utils import download_files_simple_example_1
 download_files_simple_example_1()
 ```
 
-1. Create Main BokehBioImageDataVis figure and scatter plot object.
+2. Create Main BokehBioImageDataVis figure and scatter plot object.
 ```python
 from BokehBioImageDataVis.BokehBioImageDataVis import BokehBioImageDataVis
 
@@ -58,14 +58,14 @@ bokeh_fig = BokehBioImageDataVis(data, output_filename='example_0_basic_use/vis.
 scatter_plot = bokeh_fig.create_scatter_figure()
 ```
 
-2. Create image and video elements, and link them to the paths in the DataFrame by specifying their keys. Additionally, create a text element, that will display all available data for each datapoint in textform.
+3. Create image and video elements, and link them to the paths in the DataFrame by specifying their keys. Additionally, create a text element, that will display all available data for each datapoint in textform.
 ```python
 img_hover = bokeh_fig.add_image_hover(key='path_to_images')
 vid_hover = bokeh_fig.add_video_hover(key='path_to_videos')
 text_hover = bokeh_fig.create_hover_text()
 ```
 
-3. Compose the final layout.
+4. Compose the final layout.
 ```python
 from bokeh.layouts import column, row
 
