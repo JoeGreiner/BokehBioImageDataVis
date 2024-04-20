@@ -217,4 +217,4 @@ Just share the whole output folder - the website will work seamlessly on differe
 
 * I've shared the website with a collaborator, however, he doesn't see any media elements. Why?
 
-I've realised that occacionally, when I send collaborators a visualisation as an archive, they don't unzip/extract the archive, but try to run the website from within the archive. Doing so will not show any media elements, as the paths are incorrect. If you send an archive/zip, people need to extract/unarchive the folder first before visiting the website. I now generate a textfile stating 'PLEASE_MAKE_SURE_IM_UNZIPPED.txt', I hope that helps to circumvent these issues :-)
+I've realised that occasionally, when I send collaborators a visualisation as an archive, they don't unzip/extract the archive, but try to run the website from within the archive. Doing so will not show any media elements, as the paths are incorrect. If you send an archive/zip, people need to extract/unarchive the folder first before visiting the website. I now generate a textfile stating 'PLEASE_MAKE_SURE_IM_UNZIPPED.txt', I hope that helps to circumvent these issues :-)
