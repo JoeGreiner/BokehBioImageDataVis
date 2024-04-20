@@ -47,7 +47,7 @@ scatter_plot = bokeh_fig.create_scatter_figure()
 # add legend text to the images and videos, can be formatted with html tags, needs legend_button to be added to the plot
 # see later in the code
 
-obj_width = 550
+obj_width = 400
 obj_height = 400
 img_hover = bokeh_fig.add_image_hover(key='path_to_images',
                                       width=obj_width, height=obj_height,
