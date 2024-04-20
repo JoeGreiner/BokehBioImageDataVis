@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(name='BokehBioImageDataVis',
       version='0.1',
@@ -7,7 +7,7 @@ setup(name='BokehBioImageDataVis',
       author='Joachim Greiner',
       author_email='joe@joegreiner.de',
       license='MIT',
-      packages=['BokehBioImageDataVis'],
+      packages=find_packages(),
       install_requires=[
           'bokeh<3', 'pandas', 'numpy', 'requests'
       ],
