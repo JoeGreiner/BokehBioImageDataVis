@@ -1,12 +1,11 @@
-# BokehBioImageDataVis
-
+## BokehBioImageDataVis: <br>Explore and share scientific data through interactive, media-rich visualisations.
 ## What is BokehBioImageDataVis?
-BokehBioImageDataVis is a simple but very effective extension of the Bokeh visualization library to link numerical data with diverse media types (e.g. metadata, images, videos) for interactive data exploration and sharing in collaborative scientific research. The core interaction mechanism of the framework is an interactive scatterplot, where users can select and display numerical features or dimensionality reduction embeddings of their dataset. Hovering over scatter points displays media data linked to each data point.
+BokehBioImageDataVis is a simple but very effective extension of the Bokeh visualisation library to link numerical data with diverse media types (e.g. metadata, images, videos) for interactive data exploration and sharing in collaborative scientific research. The core interaction mechanism of the framework is an interactive scatterplot, where users can select and display numerical features or dimensionality reduction embeddings of their dataset. Hovering over scatter points displays media data linked to each data point.
 
 <p align="center">
   <img src="https://github.com/JoeGreiner/BokehBioImageDataVis/assets/24453528/57d99753-c8d7-4ce4-bd87-c4ddcb01ceb3" alt="bokeh">
   <br>
-  <em>Interactive scatterplot visualization from BokehBioImageDataVis demonstrating cardiomyocyte organelle segmentation.</em>
+  <em>Interactive scatterplot visualisation from BokehBioImageDataVis demonstrating cardiomyocyte organelle segmentation.</em>
 </p>
 
 ## 🏠 Table of Contents
@@ -215,16 +214,24 @@ See comments in the code for the use of:
 
 * How do I generate media (automatically)?
 
-This depends really on what you want to visualise, for many applications, matplotlib (2D figures) and ParaView (3D renders) are a great choice. Please do not hesitate to contact me if you're stuck here.
+This depends really on what you want to visualise. Matplotlib (2D figures) and ParaView (3D renders) are great choices for many applications. Please do not hesitate to contact me if you're stuck here.
 
-* I get 'missing data' symbols in my website. Why?
+* I get 'missing data' symbols on my website. Why?
 
 The paths that you have specified do not exist, and therefore can't be linked. Make sure that the paths are correct. It does not matter if you use relative or absolute paths, the framework will copy all media to the output directory next to the website and link them relatively, so that the output folder can be moved to other computers with the links still working.
 
 * How do I share a website?
 
-Just share the whole output folder - the website will work seamlessly on different locations. Alternatively, you can also host the website online.
+Just share the output folder – the website will work seamlessly in different locations. Alternatively, you can host the website online.
 
 * I've shared the website with a collaborator, however, he doesn't see any media elements. Why?
 
 I've realised that occasionally, when I send collaborators a visualisation as an archive, they don't unzip/extract the archive, but try to run the website from within the archive. Doing so will not show any media elements, as the paths are incorrect. If you send an archive/zip, people need to extract/unarchive the folder first before visiting the website. I now generate a textfile stating 'PLEASE_MAKE_SURE_IM_UNZIPPED.txt', I hope that helps to circumvent these issues :-)
+
+## Shoutouts
+
+In addition to BokehBioImageDataVis, there are other absolutely fantastic tools available for similar or related visualisation tasks that might be of interest. You may want to check them out too, as they have a different focus and ecosystem. Please note that I developed BokehBioImageDataVis independently and have no affiliation with these other tools.
+
+* [IDE (Image Data Explorer)](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0273698) <br>Especially cool if you work within the R ecosystem and you are looking to integrate data analysis with the visualisation workflow.
+
+* [MoBIE](https://www.nature.com/articles/s41592-023-01776-4)<br>Especially cool if you work within the Fiji/BDV ecosystem and have massive image data (TB, cloud-stored) to explore and visualise.
