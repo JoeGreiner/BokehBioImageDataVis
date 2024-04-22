@@ -234,4 +234,4 @@ In addition to BokehBioImageDataVis, there are other absolutely fantastic tools 
 
 * [IDE (Image Data Explorer)](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0273698) <br>Especially cool if you work within the R ecosystem and you are looking to integrate data analysis with the visualisation workflow.
 
-* [MoBIE](https://www.nature.com/articles/s41592-023-01776-4)<br>Especially cool if you work within the Fiji/BDV ecosystem and have massive image data (TB, cloud-stored) to explore and visualise.
+* [MoBIE (MultiModal Big Image Data Sharing and Exploration)](https://www.nature.com/articles/s41592-023-01776-4)<br>Especially cool if you work within the Fiji/BDV ecosystem and have massive image data (TB, cloud-stored) to explore and visualise.
