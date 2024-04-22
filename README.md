@@ -1,12 +1,12 @@
 ## BokehBioImageDataVis: <br>Explore and share scientific data through interactive, media-rich visualisations.
-## What is BokehBioImageDataVis?
-BokehBioImageDataVis is a simple but very effective extension of the Bokeh visualisation library to link numerical data with diverse media types (e.g. metadata, images, videos) for interactive data exploration and sharing in collaborative scientific research. The core interaction mechanism of the framework is an interactive scatterplot, where users can select and display numerical features or dimensionality reduction embeddings of their dataset. Hovering over scatter points displays media data linked to each data point.
-
 <p align="center">
   <img src="https://github.com/JoeGreiner/BokehBioImageDataVis/assets/24453528/57d99753-c8d7-4ce4-bd87-c4ddcb01ceb3" alt="bokeh">
   <br>
-  <em>Interactive scatterplot visualisation from BokehBioImageDataVis demonstrating cardiomyocyte organelle segmentation.</em>
+  <em>Interactive BokehBioImageDataVis website visualising results of a cardiomyocyte organelle analysis workflow.</em>
 </p>
+
+## What is BokehBioImageDataVis?
+BokehBioImageDataVis is a simple but effective extension of the Bokeh visualisation library to link numerical data with diverse media types (e.g. metadata, images, videos) for interactive data exploration and sharing in collaborative scientific research. The core interaction mechanism of the framework is an interactive scatterplot, where users can select and display numerical features or dimensionality reduction embeddings of their dataset. Hovering over scatter points displays media data linked to each data point.
 
 ## 🏠 Table of Contents
 
