@@ -1,6 +1,6 @@
 ## BokehBioImageDataVis: <br>Explore and share scientific data through interactive, media-rich visualisations.
 <p align="center">
-  <img src="https://github.com/JoeGreiner/BokehBioImageDataVis/assets/24453528/57d99753-c8d7-4ce4-bd87-c4ddcb01ceb3" alt="bokeh">
+  <img src="https://github.com/JoeGreiner/BokehBioImageDataVis/assets/24453528/9b97c25c-4168-4e3d-beed-c77056253241" alt="bokeh">
   <br>
   <em>Interactive BokehBioImageDataVis website visualising results of a cardiomyocyte organelle analysis workflow.</em>
 </p>
