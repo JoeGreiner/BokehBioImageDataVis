@@ -29,7 +29,7 @@ pip install git+https://github.com/JoeGreiner/BokehBioImageDataVis.git
 
 ## Basic Use [🏠](#-table-of-contents)
 ### Code (see examples/0_basic_use.py)
-1. Define dataframe with numeric data and media data paths. The paths can be relative or absolute, but have to link to existing files. If they link to non-existing files, a 'missing data' image will be displayed. In a real-world scenario, you would load your experimental results, and construct matching paths for each datapoint. Media (plots, figures, images, 3D renders, ...) need to be generated previously.
+1. Define dataframe with numeric data and media data paths. You can include an arbitrary amount of media (images, videos) with an arbitrary naming convention for the keys. The paths can be relative or absolute, but have to link to existing files. If they link to non-existing files, a 'missing data' image will be displayed. In a real-world scenario, you would load your experimental results, and construct matching paths for each datapoint. Media (plots, figures, images, 3D renders, ...) need to be generated previously.
 
 The following code creates the structure, one row per datapoint, for the following datapoints:
 
