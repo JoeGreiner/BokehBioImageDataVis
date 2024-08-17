@@ -65,15 +65,10 @@ def copy_files_to_output_dir(df, path_key, output_folder, used_paths, copy_files
 
         # check if file exists already, if so, check if it has the same size
         # if equal, skip copy
-        if exists(target_path):
-            if exists(src_path) and exists(target_path):
-                if getsize(src_path) == getsize(target_path):
-                    logging.info(f'Info: {target_path} already exists and has the same size. Skipping copy.')
-                    continue
-                else:
-                    logging.warning(f'Warning: {target_path} already exists but source file does not exist. Overwriting.')
-
-        shutil.copyfile(src_path, target_path)
+        if exists(target_path) and (getsize(src_path) == getsize(target_path)):
+            logging.info(f'Info: {target_path} already exists and has the same size. Skipping copy.')
+        else:
+            shutil.copyfile(src_path, target_path)
 
         # update old path to new relative path 'data/...'
         target_path_relative = join('data', folder_structure_to_copy, filename)
