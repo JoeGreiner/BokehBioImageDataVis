@@ -2,7 +2,7 @@ import logging
 import shutil
 import uuid
 from os import makedirs
-from os.path import split, join, basename, splitext, exists, dirname, normpath
+from os.path import split, join, basename, splitext, exists, dirname, normpath, getsize
 
 import pandas as pd
 
@@ -62,6 +62,17 @@ def copy_files_to_output_dir(df, path_key, output_folder, used_paths, copy_files
         if normpath(src_path) == normpath(target_path):
             logging.warning('Warning: src and target path are the same. Skipping copy.')
             continue
+
+        # check if file exists already, if so, check if it has the same size
+        # if equal, skip copy
+        if exists(target_path):
+            if exists(src_path) and exists(target_path):
+                if getsize(src_path) == getsize(target_path):
+                    logging.info(f'Info: {target_path} already exists and has the same size. Skipping copy.')
+                    continue
+                else:
+                    logging.warning(f'Warning: {target_path} already exists but source file does not exist. Overwriting.')
+
         shutil.copyfile(src_path, target_path)
 
         # update old path to new relative path 'data/...'
