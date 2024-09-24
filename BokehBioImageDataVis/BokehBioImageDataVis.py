@@ -61,7 +61,7 @@ class BokehBioImageDataVis:
 
 
 
-        self.df = df
+        self.df = df.copy()
         if add_id_to_dataframe:
             logging.info('Adding id column to dataframe')
             # check if id is already present
@@ -215,8 +215,8 @@ class BokehBioImageDataVis:
 
     def create_scatter_figure(self, colorKey=None, colorLegendKey=None, scatter_alpha=0.5, highlight_alpha=0.3):
 
-        self.scatter_figure = figure(plot_height=self.scatter_height,
-                                     plot_width=self.scatter_width,
+        self.scatter_figure = figure(height=self.scatter_height,
+                                    width=self.scatter_width,
                                      x_axis_label=self.x_axis_key,
                                      y_axis_label=self.y_axis_key,
                                      tools="pan,wheel_zoom,box_zoom,reset")
