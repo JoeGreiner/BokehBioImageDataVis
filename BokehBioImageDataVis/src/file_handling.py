@@ -72,6 +72,8 @@ def copy_files_to_output_dir(df, path_key, output_folder, used_paths, copy_files
 
         # update old path to new relative path 'data/...'
         target_path_relative = join('data', folder_structure_to_copy, filename)
+
+        # escape # in the path
         df[path_key] = df[path_key].replace(src_path, target_path_relative)
 
     return df, used_paths

@@ -7,6 +7,8 @@ from pandas.core.dtypes.common import is_float_dtype
 
 from BokehBioImageDataVis.src.utils import detect_if_key_is_numeric, detect_if_key_is_float
 
+from urllib.parse import quote
+
 
 def image_html_and_callback(unique_html_id, df, key, height=None, width=None, image_height=None, image_width=None,
                             title=None, margin_title=5):
@@ -37,10 +39,14 @@ def image_html_and_callback(unique_html_id, df, key, height=None, width=None, im
     else:
         title_html = ''
 
+    path_to_image = df[key].iloc[0]
+    # escape # in the path
+    path_to_image = quote(path_to_image)
+    path_to_image = path_to_image.replace('#', '%23')
     html_img = (f'<div style="position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; {image_height_str} {image_width_str}">\n'
                 f'{title_html}'
                 f'  <img\n'
-                f'    src="{df[key].iloc[0]}"\n'
+                f'    src="{path_to_image}"\n'
                 f'    id="{unique_html_id}"\n'
                 '    style="width: 100%; max-height: 100%; margin: 0px 15px 15px 0px; object-fit: contain"\n'
                 '   ></img>\n'
@@ -52,7 +58,9 @@ def image_html_and_callback(unique_html_id, df, key, height=None, width=None, im
     callback_img = ("const indices = cb_data.index.indices\n"
                     "if(indices.length > 0){\n"
                     "    const index = indices[0];\n"
-                    f'   document.getElementById("{unique_html_id}").src = source.data["{key}"][index];\n'
+                    f'    const path = source.data["{key}"][index];\n'
+                    "    const encodedPath = encodeURI(path).replace(/#/g, '%23');\n"
+                    f'    document.getElementById("{unique_html_id}").src = encodedPath;\n'
                     "}")
 
     return div_img, callback_img
@@ -148,12 +156,15 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
         else:
             autoplay = ''
 
+    path_to_video = df[key].iloc[0]
+    path_to_video = quote(path_to_video)
+    path_to_video = path_to_video.replace('#', '%23')
 
     html_string = (
         f'<div style="position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; {video_height_str} {video_width_str}">'
         f'{title_html}'
         f'    <video controls {autoplay}muted loop id="{unique_html_id}" data-value="firstvalue" style="width: 100%; max-height: 100%; object-fit: contain">'
-        f'        <source src="{df[key].iloc[0]}" type="video/mp4">'
+        f'        <source src="{path_to_video}" type="video/mp4">'
         f'        Your browser does not support the video tag.'
         '    </video>'
         '</div>'
@@ -166,7 +177,7 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
          "    const index = indices[0];\n"
          f'    const old_index = document.getElementById("{unique_html_id}").getAttribute("data-value");\n'
          '    if(index != old_index){\n'
-         f'        document.getElementById("{unique_html_id}").src = source.data["{key}"][index];\n'
+         f'        document.getElementById("{unique_html_id}").src = encodeURI(source.data["{key}"][index]).replace(/#/g, "%23");\n'
          f'        document.getElementById("{unique_html_id}").setAttribute("data-value", index);\n'
          '    }\n'
          "}")

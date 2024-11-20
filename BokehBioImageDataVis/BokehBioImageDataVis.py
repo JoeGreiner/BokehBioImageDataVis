@@ -618,11 +618,11 @@ class BokehBioImageDataVis:
         for registered_video_element in self.registered_video_elements:
             current_key = registered_video_element['key']
             current_id = registered_video_element['id']
-            callback_slider += f'document.getElementById("{current_id}").src = source.data["{current_key}"][index];\n'
+            callback_slider += f'document.getElementById("{current_id}").src = encodeURI(source.data["{current_key}"][index]).replace(/#/g, "%23");\n'
         for registered_image_element in self.registered_image_elements:
             current_key = registered_image_element['key']
             current_id = registered_image_element['id']
-            callback_slider += f'document.getElementById("{current_id}").src = source.data["{current_key}"][index];\n'
+            callback_slider += f'document.getElementById("{current_id}").src = encodeURI(source.data["{current_key}"][index]).replace(/#/g, "%23");\n'
         for registered_text_element in self.registered_text_elements:
             current_update_function = registered_text_element['js_update']
             callback_slider += current_update_function.replace("    ", "")
