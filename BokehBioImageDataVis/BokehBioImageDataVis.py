@@ -23,6 +23,7 @@ from BokehBioImageDataVis.src.utils import identify_numerical_variables
 class BokehBioImageDataVis:
     def __init__(self, df,
                  scatter_width=600, scatter_height=600, scatter_size=10,
+                 scatterplot_select_options_width=100,
                  do_scatter_data_hover=True,
                  scatter_data_hover_float_precision=2,
                  x_axis_key=None,
@@ -158,6 +159,7 @@ class BokehBioImageDataVis:
         self.scatter_width = scatter_width
         self.scatter_height = scatter_height
         self.scatter_size = scatter_size
+        self.scatterplot_select_options_width = scatterplot_select_options_width
         self.do_scatter_data_hover = do_scatter_data_hover
         self.scatter_data_hover_float_precision = scatter_data_hover_float_precision
 
@@ -293,7 +295,7 @@ class BokehBioImageDataVis:
           """))
 
         controls = [self.axesselect_x, self.axesselect_y]
-        self.scatterplot_select_options = column(*controls, width=100)
+        self.scatterplot_select_options = column(*controls, width=self.scatterplot_select_options_width)
         self.scatterplot_select_options.css_classes = ["dropdown_controls"]
 
         return row([self.scatterplot_select_options, self.scatter_figure])
@@ -384,8 +386,9 @@ class BokehBioImageDataVis:
         return div_img
 
     def add_toggle_video_button(self):
+        width_button = (self.scatter_width + self.scatterplot_select_options_width) // 2
         self.toggleVideoButton = Button(label="Toggle Pause/Play Videos", button_type="success",
-                                         css_classes=["video-toggle-button"])
+                                         css_classes=["video-toggle-button"], width = width_button)
         button_code_video = """
         var videos = document.getElementsByTagName('video');
         console.log(videos);
@@ -416,8 +419,9 @@ class BokehBioImageDataVis:
         }
         """
 
+        width_button = (self.scatter_width + self.scatterplot_select_options_width) // 2
         self.toggleLegendButton = Button(label="Show Legend", button_type="success",
-                                         css_classes=["highlight-button"])
+                                         css_classes=["highlight-button"], width = width_button)
         self.toggleLegendButton.js_on_click(CustomJS(code=toggle_js))
 
 
@@ -611,7 +615,9 @@ class BokehBioImageDataVis:
             warnings.warn("Warning: only one data point, slider will not be shown.")
             # return dummywidget
             return Div(text="")
-        self.manual_id_selection_slider = Slider(start=0, end=len(self.df) - 1, value=0, step=1, title="Id", name='id_slider')
+        self.manual_id_selection_slider = Slider(start=0, end=len(self.df) - 1, value=0, step=1, title="Id",
+                                                 name='id_slider',
+                                                 width=self.scatter_width + self.scatterplot_select_options_width)
         self.manual_id_selection_slider.css_classes = ["unique-slider-class"]
 
         callback_slider = "const index = manual_id_selection.value;\n"
