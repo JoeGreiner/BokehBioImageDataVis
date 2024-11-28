@@ -366,6 +366,10 @@ class BokehBioImageDataVis:
             if not os.path.exists(join(self.output_folder, path_img)):
                 logging.warning(f'Path {path_img} does not exist. Replacing with data missing image.')
                 self.df[key] = self.df[key].replace(path_img, f'data/{missing_data_icon}')
+            if not path_img:
+                logging.warning(f'Path {path_img} is empty. Replacing with data missing image.')
+                self.df[key] = self.df[key].replace(path_img, f'data/{missing_data_icon}')
+
         self.csd_source.data[key] = self.df[key]
 
         unique_html_id = uuid.uuid4()
@@ -683,6 +687,9 @@ class BokehBioImageDataVis:
         for path_video in self.df[key]:
             if not os.path.exists(join(self.output_folder, path_video)):
                 logging.warning(f'Path {path_video} does not exist. Replacing with data missing video.')
+                self.df[key] = self.df[key].replace(path_video, f'data/{missing_data_mp4}')
+            if not path_video:
+                logging.warning(f'Path {path_video} is empty. Replacing with data missing image.')
                 self.df[key] = self.df[key].replace(path_video, f'data/{missing_data_mp4}')
         self.csd_source.data[key] = self.df[key]
 
