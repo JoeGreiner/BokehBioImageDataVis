@@ -624,6 +624,12 @@ class BokehBioImageDataVis:
                                                  width=self.scatter_width + self.scatterplot_select_options_width)
         self.manual_id_selection_slider.css_classes = ["unique-slider-class"]
 
+        hint_div = Div(
+            text=(
+                "<b>Hint:</b> After clicking on the slider, you may use arrow keys (←/→) to navigate."
+            )
+        )
+
         callback_slider = "const index = manual_id_selection.value;\n"
         for registered_video_element in self.registered_video_elements:
             current_key = registered_video_element['key']
@@ -650,7 +656,7 @@ class BokehBioImageDataVis:
             code=callback_slider)
 
         self.manual_id_selection_slider.js_on_change('value', callback)
-        return self.manual_id_selection_slider
+        return column([hint_div, self.manual_id_selection_slider])
 
     def add_video_hover(self, key, width=300, height=300, video_width=None, video_height=None, legend_text="",
                         title=None, autoplay=True):
