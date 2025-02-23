@@ -77,7 +77,7 @@ class BokehBioImageDataVis:
         else:
             self.category_key = None
         self.legend_position =  legend_position
-        allowed_positions = ['bottom_right', 'bottom_left', 'top_left', 'top_right']
+        allowed_positions = ['bottom_right', 'bottom_left', 'top_left', 'top_right', 'outside']
         assert self.legend_position in allowed_positions, (f'legend position must be in {allowed_positions}, got'
                                                            f'{self.legend_position}')
 
@@ -235,8 +235,14 @@ class BokehBioImageDataVis:
                                        alpha=scatter_alpha,
                                        color='color_mapping', legend_group=self.category_key, name='main_graph'
                                        )
-            # change legend location to bottom right
-            self.scatter_figure.legend.location = self.legend_position
+
+            if self.legend_position.lower() == "outside":
+                legend_obj = self.scatter_figure.legend[0]
+                self.scatter_figure.legend.remove(legend_obj)
+                self.scatter_figure.add_layout(legend_obj, 'right')
+            else:
+                self.scatter_figure.legend.location = self.legend_position
+
             # change legend background alpha
             self.scatter_figure.legend.background_fill_alpha = 0.5
             # show the title of the legend
@@ -249,8 +255,13 @@ class BokehBioImageDataVis:
                                        alpha=scatter_alpha,
                                        color=colorKey, legend_group=colorLegendKey, name='main_graph'
                                        )
-            # change legend location to bottom right
-            self.scatter_figure.legend.location = "bottom_right"
+            if self.legend_position.lower() == "outside":
+                legend_obj = self.scatter_figure.legend[0]
+                self.scatter_figure.legend.remove(legend_obj)
+                self.scatter_figure.add_layout(legend_obj, 'right')
+            else:
+                self.scatter_figure.legend.location = self.legend_position
+
             # change legend background alpha
             self.scatter_figure.legend.background_fill_alpha = 0.5
             # show the title of the legend
