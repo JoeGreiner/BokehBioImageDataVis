@@ -219,7 +219,7 @@ class BokehBioImageDataVis:
         self.highlight_csd_source = ColumnDataSource(data=self.highlight_df)
         self.highlight_csd_view = CDSView(source=self.highlight_csd_source)
 
-    def create_scatter_figure(self, colorKey=None, colorLegendKey=None, scatter_alpha=0.5, highlight_alpha=0.3):
+    def create_scatter_figure(self, colorKey=None, markerKey=None, colorLegendKey=None, markerLegendKey=None, scatter_alpha=0.5, highlight_alpha=0.3):
 
         self.scatter_figure = figure(height=self.scatter_height,
                                     width=self.scatter_width,
@@ -227,16 +227,20 @@ class BokehBioImageDataVis:
                                      y_axis_label=self.y_axis_key,
                                      tools="pan,wheel_zoom,box_zoom,reset")
 
-        self.scatter_figure.circle('highlight_x', 'highlight_y',
+        self.scatter_figure.scatter('highlight_x', 'highlight_y',
                                    source=self.highlight_csd_source, view=self.highlight_csd_view,
                                    size=3 * self.scatter_size, color="red", alpha=highlight_alpha
                                    )
+        if not markerKey:
+            markerKey = 'circle'
+
         if self.category_key:
             logging.info(f'Using {self.category_key} as color key.')
-            self.scatter_figure.circle('active_axis_x', 'active_axis_y',
+            self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
                                        source=self.csd_source, view=self.csd_view,
                                        size=self.scatter_size,
                                        alpha=scatter_alpha,
+                                        marker=markerKey,
                                        color='color_mapping', legend_group=self.category_key, name='main_graph'
                                        )
 
@@ -255,10 +259,33 @@ class BokehBioImageDataVis:
                 self.scatter_figure.legend.title = self.legend_title
         elif colorKey and colorLegendKey:
             logging.info(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
-            self.scatter_figure.circle('active_axis_x', 'active_axis_y',
+            self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
                                        source=self.csd_source, view=self.csd_view,
                                        size=self.scatter_size,
                                        alpha=scatter_alpha,
+                                        marker=markerKey,
+                                       color=colorKey, legend_group=colorLegendKey, name='main_graph'
+                                       )
+            if self.legend_position.lower() == "outside":
+                legend_obj = self.scatter_figure.legend[0]
+                self.scatter_figure.legend.remove(legend_obj)
+                self.scatter_figure.add_layout(legend_obj, 'right')
+            else:
+                self.scatter_figure.legend.location = self.legend_position
+
+            # change legend background alpha
+            self.scatter_figure.legend.background_fill_alpha = 0.5
+            # show the title of the legend
+            self.scatter_figure.legend.title = self.category_key
+            if self.legend_title:
+                self.scatter_figure.legend.title = self.legend_title
+        elif colorKey and colorLegendKey:
+            logging.info(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
+            self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
+                                       source=self.csd_source, view=self.csd_view,
+                                       size=self.scatter_size,
+                                       alpha=scatter_alpha,
+                                        marker=markerKey,
                                        color=colorKey, legend_group=colorLegendKey, name='main_graph'
                                        )
             if self.legend_position.lower() == "outside":
@@ -278,9 +305,12 @@ class BokehBioImageDataVis:
             self.scatter_figure.circle('active_axis_x', 'active_axis_y',
                                        source=self.csd_source, view=self.csd_view,
                                        size=self.scatter_size, name='main_graph',
-                                       alpha=scatter_alpha
+                                       alpha=scatter_alpha,
+                                       marker=markerKey,
                                        # color="colors", legend_group='id'
                                        )
+
+
 
         self.axesselect_x = Select(title="X-Axis:", value=self.x_axis_key, options=self.dropdown_options)
         self.axesselect_x.js_on_change('value',
