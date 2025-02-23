@@ -35,6 +35,7 @@ class BokehBioImageDataVis:
                  copy_files_dir_level=1,
                  clearOutputFolderIfNotEmpty=False,
                  legend_position = "bottom_right",
+                 legend_title=None,
                  output_filename='BokehBioImageDataVis.html',
                  output_title=None, ):
         '''
@@ -55,6 +56,8 @@ class BokehBioImageDataVis:
         :param do_copy_files_to_output_dir: copy files to output dir, relative paths, to make everything portable
         :param copy_files_dir_level: how many levels of the folder structure should be preserved when copying files
         :param clearOutputFolderIfNotEmpty: if output folder is not empty, delete contents
+        :param legend_position: position of the legend, can be 'bottom_right', 'bottom_left', 'top_left', 'top_right', 'outside'
+        :param legend_title: title of the legend
         :param output_filename: html output filename
         :param output_title: title of the html output
         '''
@@ -77,6 +80,7 @@ class BokehBioImageDataVis:
         else:
             self.category_key = None
         self.legend_position =  legend_position
+        self.legend_title = legend_title
         allowed_positions = ['bottom_right', 'bottom_left', 'top_left', 'top_right', 'outside']
         assert self.legend_position in allowed_positions, (f'legend position must be in {allowed_positions}, got'
                                                            f'{self.legend_position}')
@@ -247,6 +251,8 @@ class BokehBioImageDataVis:
             self.scatter_figure.legend.background_fill_alpha = 0.5
             # show the title of the legend
             self.scatter_figure.legend.title = self.category_key
+            if self.legend_title:
+                self.scatter_figure.legend.title = self.legend_title
         elif colorKey and colorLegendKey:
             logging.info(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
             self.scatter_figure.circle('active_axis_x', 'active_axis_y',
@@ -266,6 +272,8 @@ class BokehBioImageDataVis:
             self.scatter_figure.legend.background_fill_alpha = 0.5
             # show the title of the legend
             self.scatter_figure.legend.title = self.category_key
+            if self.legend_title:
+                self.scatter_figure.legend.title = self.legend_title
         else:
             self.scatter_figure.circle('active_axis_x', 'active_axis_y',
                                        source=self.csd_source, view=self.csd_view,
