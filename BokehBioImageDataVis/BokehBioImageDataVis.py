@@ -234,6 +234,21 @@ class BokehBioImageDataVis:
         if not markerKey:
             markerKey = 'circle'
 
+        if colorLegendKey and markerLegendKey:
+            self.df['legend'] = self.df.apply(lambda x: f'{x[colorLegendKey]} {x[markerLegendKey]}', axis=1)
+        elif colorLegendKey:
+            self.df['legend'] = self.df[colorLegendKey]
+        elif markerLegendKey:
+            self.df['legend'] = self.df[markerLegendKey]
+        elif self.category_key:
+            self.df['legend'] = self.df[self.category_key]
+        else:
+            logging.warning('No legend key provided, the legend will be empty.')
+
+        # update views after changed legend
+        self.csd_source = ColumnDataSource(data=self.df)
+        self.csd_view = CDSView(source=self.csd_source)
+
         if self.category_key:
             logging.info(f'Using {self.category_key} as color key.')
             self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
@@ -241,76 +256,38 @@ class BokehBioImageDataVis:
                                        size=self.scatter_size,
                                        alpha=scatter_alpha,
                                         marker=markerKey,
-                                       color='color_mapping', legend_group=self.category_key, name='main_graph'
+                                       color='color_mapping', legend_group="legend", name='main_graph'
                                        )
-
-            if self.legend_position.lower() == "outside":
-                legend_obj = self.scatter_figure.legend[0]
-                self.scatter_figure.legend.remove(legend_obj)
-                self.scatter_figure.add_layout(legend_obj, 'right')
-            else:
-                self.scatter_figure.legend.location = self.legend_position
-
-            # change legend background alpha
-            self.scatter_figure.legend.background_fill_alpha = 0.5
-            # show the title of the legend
-            self.scatter_figure.legend.title = self.category_key
-            if self.legend_title:
-                self.scatter_figure.legend.title = self.legend_title
-        elif colorKey and colorLegendKey:
+        elif colorKey:
             logging.info(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
             self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
-                                       source=self.csd_source, view=self.csd_view,
-                                       size=self.scatter_size,
-                                       alpha=scatter_alpha,
+                                        source=self.csd_source, view=self.csd_view,
+                                        size=self.scatter_size,
+                                        alpha=scatter_alpha,
                                         marker=markerKey,
-                                       color=colorKey, legend_group=colorLegendKey, name='main_graph'
-                                       )
-            if self.legend_position.lower() == "outside":
-                legend_obj = self.scatter_figure.legend[0]
-                self.scatter_figure.legend.remove(legend_obj)
-                self.scatter_figure.add_layout(legend_obj, 'right')
-            else:
-                self.scatter_figure.legend.location = self.legend_position
-
-            # change legend background alpha
-            self.scatter_figure.legend.background_fill_alpha = 0.5
-            # show the title of the legend
-            self.scatter_figure.legend.title = self.category_key
-            if self.legend_title:
-                self.scatter_figure.legend.title = self.legend_title
-        elif colorKey and colorLegendKey:
-            logging.info(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
-            self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
-                                       source=self.csd_source, view=self.csd_view,
-                                       size=self.scatter_size,
-                                       alpha=scatter_alpha,
-                                        marker=markerKey,
-                                       color=colorKey, legend_group=colorLegendKey, name='main_graph'
-                                       )
-            if self.legend_position.lower() == "outside":
-                legend_obj = self.scatter_figure.legend[0]
-                self.scatter_figure.legend.remove(legend_obj)
-                self.scatter_figure.add_layout(legend_obj, 'right')
-            else:
-                self.scatter_figure.legend.location = self.legend_position
-
-            # change legend background alpha
-            self.scatter_figure.legend.background_fill_alpha = 0.5
-            # show the title of the legend
-            self.scatter_figure.legend.title = self.category_key
-            if self.legend_title:
-                self.scatter_figure.legend.title = self.legend_title
+                                        color=colorKey, legend_group="legend", name='main_graph'
+                                        )
         else:
-            self.scatter_figure.circle('active_axis_x', 'active_axis_y',
+            self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
                                        source=self.csd_source, view=self.csd_view,
                                        size=self.scatter_size, name='main_graph',
                                        alpha=scatter_alpha,
                                        marker=markerKey,
-                                       # color="colors", legend_group='id'
                                        )
 
+        if self.legend_position.lower() == "outside":
+            legend_obj = self.scatter_figure.legend[0]
+            self.scatter_figure.legend.remove(legend_obj)
+            self.scatter_figure.add_layout(legend_obj, 'right')
+        else:
+            self.scatter_figure.legend.location = self.legend_position
 
+        # change legend background alpha
+        self.scatter_figure.legend.background_fill_alpha = 0.5
+        # show the title of the legend
+        self.scatter_figure.legend.title = self.category_key
+        if self.legend_title:
+            self.scatter_figure.legend.title = self.legend_title
 
         self.axesselect_x = Select(title="X-Axis:", value=self.x_axis_key, options=self.dropdown_options)
         self.axesselect_x.js_on_change('value',
