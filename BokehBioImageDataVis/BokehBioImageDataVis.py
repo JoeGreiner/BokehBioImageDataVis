@@ -275,19 +275,20 @@ class BokehBioImageDataVis:
                                        marker=markerKey,
                                        )
 
-        if self.legend_position.lower() == "outside":
-            legend_obj = self.scatter_figure.legend[0]
-            self.scatter_figure.legend.remove(legend_obj)
-            self.scatter_figure.add_layout(legend_obj, 'right')
-        else:
-            self.scatter_figure.legend.location = self.legend_position
+        if self.scatter_figure.legend:
+            if self.legend_position.lower() == "outside":
+                legend_obj = self.scatter_figure.legend[0]
+                self.scatter_figure.legend.remove(legend_obj)
+                self.scatter_figure.add_layout(legend_obj, 'right')
+            else:
+                self.scatter_figure.legend.location = self.legend_position
 
-        # change legend background alpha
-        self.scatter_figure.legend.background_fill_alpha = 0.5
-        # show the title of the legend
-        self.scatter_figure.legend.title = self.category_key
-        if self.legend_title:
-            self.scatter_figure.legend.title = self.legend_title
+            # change legend background alpha
+            self.scatter_figure.legend.background_fill_alpha = 0.5
+            # show the title of the legend
+            self.scatter_figure.legend.title = self.category_key
+            if self.legend_title:
+                self.scatter_figure.legend.title = self.legend_title
 
         self.axesselect_x = Select(title="X-Axis:", value=self.x_axis_key, options=self.dropdown_options)
         self.axesselect_x.js_on_change('value',
