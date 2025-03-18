@@ -258,7 +258,7 @@ class BokehBioImageDataVis:
                                         marker=markerKey,
                                        color='color_mapping', legend_group="legend", name='main_graph'
                                        )
-        elif colorKey or markerKey:
+        elif colorKey:
             logging.info(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
             self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
                                         source=self.csd_source, view=self.csd_view,
