@@ -14,8 +14,13 @@ data = pd.DataFrame({'x1': [1, 2, 3],
                                         'data/pictures/dog2.jpg'],
                      'path_to_videos': ['data/videos/cat1.mp4',
                                         'data/videos/dog1.mp4',
-                                        'data/videos/dog2.mp4']
+                                        'data/videos/dog2.mp4'],
+                     'colors': ['#e28743', '#0f0f0f', '#ff0000'],
+                     'colorLegend': ['cat', 'dog', 'dog'],
+                     'marker': ['circle', 'square', 'triangle'],
+                     'markerLegend': ['(neutral)', '(good)', '(very good)'],
                      })
+
 
 # helper function that downloads example files
 from BokehBioImageDataVis.src.utils import download_files_simple_example_1
@@ -31,12 +36,17 @@ from BokehBioImageDataVis.BokehBioImageDataVis import BokehBioImageDataVis
 # position of the legend can be set with the legend_position argument
 # FEATURE: Default Axis Keys
 # set default axis keys for the scatter plot, can be changed interactively
-bokeh_fig = BokehBioImageDataVis(data, output_filename='example_1_additional_features/vis.html', category_key='animal',
-                                 legend_position='top_left', x_axis_key='x3', y_axis_key='x2')
-scatter_plot = bokeh_fig.create_scatter_figure()
+bokeh_fig = BokehBioImageDataVis(data, output_filename='example_1_additional_features/vis.html',
+                                 legend_position='outside', legend_title='title overwrite', x_axis_key='x3', y_axis_key='x2')
+# scatter_plot = bokeh_fig.create_scatter_figure(markerKey='marker', markerLegendKey='markerLegend',
+#                                                colorKey='colors', colorLegendKey='colorLegend')
+# scatter_plot = bokeh_fig.create_scatter_figure(
+#                                                colorKey='colors', colorLegendKey='colorLegend')
+scatter_plot = bokeh_fig.create_scatter_figure(markerKey='marker', markerLegendKey='markerLegend',
+                                               )
 
 # Step 2
-# Create image and video elements, and link them to the paths in the DataFrame by specifying their keys.
+# Create image and video elements, and link them to the paths in th`e DataFrame by specifying their keys.
 # Additionally, create a text element, that will display all available data for each datapoint in textform.
 
 # FEATURE: Scaling
