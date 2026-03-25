@@ -118,6 +118,7 @@ class BokehBioImageDataVis:
             os.makedirs(self.output_folder)
 
         # holds tuples of [dataframe_key and html unique ideas]
+        self.scatter_figure = None
         self.registered_video_elements = []
         self.registered_image_elements = []
 
@@ -218,6 +219,13 @@ class BokehBioImageDataVis:
 
         self.highlight_csd_source = ColumnDataSource(data=self.highlight_df)
         self.highlight_csd_view = CDSView(source=self.highlight_csd_source)
+
+    def _require_scatter_figure(self):
+        if self.scatter_figure is None:
+            raise RuntimeError(
+                "No scatter figure has been created yet. "
+                "Please call 'create_scatter_figure()' before adding hovers, text, sliders, or legends."
+            )
 
     def create_scatter_figure(self, colorKey=None, markerKey=None, colorLegendKey=None, markerLegendKey=None, scatter_alpha=0.5, highlight_alpha=0.3):
 
@@ -328,6 +336,7 @@ class BokehBioImageDataVis:
         return row([self.scatterplot_select_options, self.scatter_figure])
 
     def add_hover_highlight(self):
+        self._require_scatter_figure()
 
         # TODO: probably can remove last_selected index in uuids and in all the other hovers and just use this one here?
         code_hover_highlight = ("const indices = cb_data.index.indices;\n"
@@ -361,6 +370,7 @@ class BokehBioImageDataVis:
 
     def add_image_hover(self, key, height=300, width=300, image_width=None, image_height=None, legend_text="",
                         title=None):
+        self._require_scatter_figure()
         # deprecated: image_width and image_height are not used anymore
         if image_width is not None:
             width = image_width
@@ -689,6 +699,7 @@ class BokehBioImageDataVis:
 
     def add_video_hover(self, key, width=300, height=300, video_width=None, video_height=None, legend_text="",
                         title=None, autoplay=True):
+        self._require_scatter_figure()
         # deprecated: video_width & video_height, use width & height instead
         if video_width is not None:
             width = video_width
@@ -747,6 +758,7 @@ class BokehBioImageDataVis:
 
     def create_hover_text(self, df_keys_to_show=None, width=500, height=300, container_width=None, container_height=None,
                           remove_path_keys=True, ignore_keys=None):
+        self._require_scatter_figure()
         # deprecated: container_width & container_height, use width & height instead
         if container_width is not None:
             width = container_width
