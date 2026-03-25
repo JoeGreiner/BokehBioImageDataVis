@@ -14,7 +14,7 @@ import logging
 from BokehBioImageDataVis.src.bokeh_helpers.get_bokeh_images_base64 import get_pan_tool_image, get_rect_zoom_image, \
     get_mouse_wheel_image, get_reset_image, get_hover_tool_image
 from BokehBioImageDataVis.src.colormapping import random_color
-from BokehBioImageDataVis.src.file_handling import copy_files_to_output_dir, create_file
+from BokehBioImageDataVis.src.file_handling import copy_files_to_output_dir, create_file, sanitize_media_path_column
 from BokehBioImageDataVis.src.html_snippets import image_html_and_callback, text_html_and_callback, \
     video_html_and_callback
 from BokehBioImageDataVis.src.utils import identify_numerical_variables
@@ -381,6 +381,8 @@ class BokehBioImageDataVis:
 
         self.non_data_keys.append(key)
         self.path_keys.append(key)
+        self.df = sanitize_media_path_column(self.df, key)
+        self.csd_source.data[key] = self.df[key]
 
         if self.do_copy_files_to_output_dir:
             self.df, self.used_paths = copy_files_to_output_dir(df=self.df, path_key=key,
@@ -711,6 +713,8 @@ class BokehBioImageDataVis:
 
         self.non_data_keys.append(key)
         self.path_keys.append(key)
+        self.df = sanitize_media_path_column(self.df, key)
+        self.csd_source.data[key] = self.df[key]
 
         if self.do_copy_files_to_output_dir:
             self.df, self.used_paths = copy_files_to_output_dir(df=self.df, path_key=key,

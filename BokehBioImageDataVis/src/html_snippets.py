@@ -1,11 +1,9 @@
 import logging
-import uuid
-
-import pandas as pd
 from bokeh.models import Div
 from pandas.core.dtypes.common import is_float_dtype
 
-from BokehBioImageDataVis.src.utils import detect_if_key_is_numeric, detect_if_key_is_float
+from BokehBioImageDataVis.src.file_handling import sanitize_media_path_value
+from BokehBioImageDataVis.src.utils import detect_if_key_is_float
 
 from urllib.parse import quote
 
@@ -39,7 +37,7 @@ def image_html_and_callback(unique_html_id, df, key, height=None, width=None, im
     else:
         title_html = ''
 
-    path_to_image = df[key].iloc[0]
+    path_to_image = sanitize_media_path_value(df[key].iloc[0])
     # slash replacement is for Windows/Edge compatability
     path_to_image = path_to_image.replace('\\', '/')
     # escape # in the path
@@ -158,7 +156,7 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
         else:
             autoplay = ''
 
-    path_to_video = df[key].iloc[0]
+    path_to_video = sanitize_media_path_value(df[key].iloc[0])
     # slash replacement is for Windows/Edge compatability
     path_to_video = path_to_video.replace('\\', '/')
     path_to_video = quote(path_to_video)
