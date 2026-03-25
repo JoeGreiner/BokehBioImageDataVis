@@ -40,6 +40,8 @@ def image_html_and_callback(unique_html_id, df, key, height=None, width=None, im
         title_html = ''
 
     path_to_image = df[key].iloc[0]
+    # slash replacement is for Windows/Edge compatability
+    path_to_image = path_to_image.replace('\\', '/')
     # escape # in the path
     path_to_image = quote(path_to_image)
     path_to_image = path_to_image.replace('#', '%23')
@@ -58,7 +60,7 @@ def image_html_and_callback(unique_html_id, df, key, height=None, width=None, im
     callback_img = ("const indices = cb_data.index.indices\n"
                     "if(indices.length > 0){\n"
                     "    const index = indices[0];\n"
-                    f'    const path = source.data["{key}"][index];\n'
+                    f'    const path = source.data["{key}"][index].replace(/\\\\/g, "/");\n'
                     "    const encodedPath = encodeURI(path).replace(/#/g, '%23');\n"
                     f'    document.getElementById("{unique_html_id}").src = encodedPath;\n'
                     "}")
@@ -157,6 +159,8 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
             autoplay = ''
 
     path_to_video = df[key].iloc[0]
+    # slash replacement is for Windows/Edge compatability
+    path_to_video = path_to_video.replace('\\', '/')
     path_to_video = quote(path_to_video)
     path_to_video = path_to_video.replace('#', '%23')
 
@@ -171,13 +175,14 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
         '')
     div_html = Div(width=video_width, width_policy="fixed", height=video_height, text=html_string)
 
+    # slash replacement is for Windows/Edge compatability
     callback_video = \
         ("const indices = cb_data.index.indices;\n"
          "if(indices.length > 0){\n"
          "    const index = indices[0];\n"
          f'    const old_index = document.getElementById("{unique_html_id}").getAttribute("data-value");\n'
          '    if(index != old_index){\n'
-         f'        document.getElementById("{unique_html_id}").src = encodeURI(source.data["{key}"][index]).replace(/#/g, "%23");\n'
+         f'        document.getElementById("{unique_html_id}").src = encodeURI(source.data["{key}"][index].replace(/\\\\/g, "/")).replace(/#/g, "%23");\n'
          f'        document.getElementById("{unique_html_id}").setAttribute("data-value", index);\n'
          '    }\n'
          "}")
