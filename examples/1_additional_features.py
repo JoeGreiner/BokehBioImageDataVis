@@ -15,8 +15,8 @@ data = pd.DataFrame({'x1': [1, 2, 3],
                      'path_to_videos': ['data/videos/cat1.mp4',
                                         'data/videos/dog1.mp4',
                                         'data/videos/dog2.mp4'],
-                     'colors': ['#e28743', '#0f0f0f', '#ff0000'],
-                     'colorLegend': ['cat', 'dog', 'dog'],
+                     'colors': ['#e28743', '#0f0f0f', '#00ff00'],
+                     'colorLegend': ['simba', 'bello', 'rex'],
                      'marker': ['circle', 'square', 'triangle'],
                      'markerLegend': ['(neutral)', '(good)', '(very good)'],
                      })
@@ -37,13 +37,16 @@ from BokehBioImageDataVis.BokehBioImageDataVis import BokehBioImageDataVis
 # FEATURE: Default Axis Keys
 # set default axis keys for the scatter plot, can be changed interactively
 bokeh_fig = BokehBioImageDataVis(data, output_filename='example_1_additional_features/vis.html',
-                                 legend_position='outside', legend_title='title overwrite', x_axis_key='x3', y_axis_key='x2')
-# scatter_plot = bokeh_fig.create_scatter_figure(markerKey='marker', markerLegendKey='markerLegend',
-#                                                colorKey='colors', colorLegendKey='colorLegend')
-# scatter_plot = bokeh_fig.create_scatter_figure(
-#                                                colorKey='colors', colorLegendKey='colorLegend')
+                                 category_key='animal',
+                                 legend_position='outside', legend_title='legend title overwrite',
+                                 x_axis_key='x3', y_axis_key='x2')
+
+# setting a category key will assign each color per category. this can be overwritten by colorkey
+# scatter_plot = bokeh_fig.create_scatter_figure()
+# scatter_plot = bokeh_fig.create_scatter_figure(colorKey='colors', colorLegendKey='colorLegend')
+# scatter_plot = bokeh_fig.create_scatter_figure(markerKey='marker', markerLegendKey='markerLegend')
 scatter_plot = bokeh_fig.create_scatter_figure(markerKey='marker', markerLegendKey='markerLegend',
-                                               )
+                                               colorKey='colors', colorLegendKey='colorLegend')
 
 # Step 2
 # Create image and video elements, and link them to the paths in th`e DataFrame by specifying their keys.

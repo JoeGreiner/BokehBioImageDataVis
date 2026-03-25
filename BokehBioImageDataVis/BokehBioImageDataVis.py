@@ -257,24 +257,24 @@ class BokehBioImageDataVis:
         self.csd_source = ColumnDataSource(data=self.df)
         self.csd_view = CDSView(source=self.csd_source)
 
-        if self.category_key:
-            logging.info(f'Using {self.category_key} as color key.')
+        if colorKey:
+            logging.info(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
             self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
                                        source=self.csd_source, view=self.csd_view,
                                        size=self.scatter_size,
                                        alpha=scatter_alpha,
                                         marker=markerKey,
-                                       color='color_mapping', legend_group="legend", name='main_graph'
-                                       )
-        elif colorKey:
-            logging.info(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
+                                        color=colorKey, legend_group="legend", name='main_graph'
+                                        )
+        elif self.category_key:
+            logging.info(f'Using {self.category_key} as color key.')
             self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
                                         source=self.csd_source, view=self.csd_view,
                                         size=self.scatter_size,
                                         alpha=scatter_alpha,
                                         marker=markerKey,
-                                        color=colorKey, legend_group="legend", name='main_graph'
-                                        )
+                                       color='color_mapping', legend_group="legend", name='main_graph'
+                                       )
         else:
             self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
                                        source=self.csd_source, view=self.csd_view,
