@@ -155,26 +155,17 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
         sync_class = 'sync-autoplay'
         # Inline event handler for synchronisation.
         # Each video is immediately paused and added to a global ready-set.
-        # After a short debounce (200 ms) we check whether ALL sync-autoplay
-        # videos have registered.  If so, they are all played together from
-        # currentTime = 0.
-        # We bind the same handler to BOTH oncanplay (fires when new source
-        # data is available, critical for re-sync after src change) and
-        # onplay (fires when autoplay starts, covers the initial load).
         sync_handler_js = (
             "(function(v){"
             "if(!window._vSync)window._vSync={r:new Set(),ok:false};"
             "if(!window._vSync.ok){"
             "v.pause();"
             "window._vSync.r.add(v.id);"
-            "clearTimeout(window._vSyncT);"
-            "window._vSyncT=setTimeout(function(){"
             "var a=document.querySelectorAll('video.sync-autoplay');"
             "if(window._vSync.r.size>=a.length){"
             "window._vSync.ok=true;"
             "a.forEach(function(x){x.currentTime=0;x.play().catch(function(){});});"
             "}"
-            "},200);"
             "}"
             "})(this)"
         )
