@@ -153,11 +153,14 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
     if autoplay:
         autoplay_attr = 'autoplay '
         sync_class = 'sync-autoplay'
-        # Inline onplay handler for synchronisation.
-        # Each video that autoplays is immediately paused and added to a
-        # global ready-set.  After a short debounce (200 ms) we check
-        # whether ALL sync-autoplay videos have registered.  If so, they
-        # are all played together from currentTime = 0.
+        # Inline event handler for synchronisation.
+        # Each video is immediately paused and added to a global ready-set.
+        # After a short debounce (200 ms) we check whether ALL sync-autoplay
+        # videos have registered.  If so, they are all played together from
+        # currentTime = 0.
+        # We bind the same handler to BOTH oncanplay (fires when new source
+        # data is available, critical for re-sync after src change) and
+        # onplay (fires when autoplay starts, covers the initial load).
         sync_handler_js = (
             "(function(v){"
             "if(!window._vSync)window._vSync={r:new Set(),ok:false};"
@@ -175,11 +178,11 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
             "}"
             "})(this)"
         )
-        sync_onplay = f''' onplay="{sync_handler_js}"'''
+        sync_events = f''' oncanplay="{sync_handler_js}" onplay="{sync_handler_js}"'''
     else:
         autoplay_attr = ''
         sync_class = ''
-        sync_onplay = ''
+        sync_events = ''
 
     path_to_video = sanitize_media_path_value(df[key].iloc[0])
     # slash replacement is for Windows/Edge compatability
@@ -190,7 +193,7 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
     html_string = (
         f'<div style="position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; {video_height_str} {video_width_str}">'
         f'{title_html}'
-        f'    <video controls {autoplay_attr}preload="auto" muted loop id="{unique_html_id}" class="{sync_class}"{sync_onplay} data-value="firstvalue" style="width: 100%; max-height: 100%; object-fit: contain">'
+        f'    <video controls {autoplay_attr}preload="auto" muted loop id="{unique_html_id}" class="{sync_class}"{sync_events} data-value="firstvalue" style="width: 100%; max-height: 100%; object-fit: contain">'
         f'        <source src="{path_to_video}" type="video/mp4">'
         f'        Your browser does not support the video tag.'
         '    </video>'
@@ -199,8 +202,9 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
     div_html = Div(width=video_width, width_policy="fixed", height=video_height, text=html_string)
 
     # slash replacement is for Windows/Edge compatability
-    # After changing the source, reset the sync state and trigger a
-    # debounced re-sync so all videos wait for each other again.
+    # After changing the source we only need to reset the sync state.
+    # The browser will load the new source and fire canplay automatically,
+    # which triggers the oncanplay handler above to re-synchronise.
     callback_video = \
         ("const indices = cb_data.index.indices;\n"
          "if(indices.length > 0){\n"
@@ -209,13 +213,7 @@ def video_html_and_callback(unique_html_id, df, key, video_height=None, video_wi
          '    if(index != old_index){\n'
          f'        document.getElementById("{unique_html_id}").src = encodeURI(source.data["{key}"][index].replace(/\\\\/g, "/")).replace(/#/g, "%23");\n'
          f'        document.getElementById("{unique_html_id}").setAttribute("data-value", index);\n'
-         '        if (window._vSync) {\n'
-         '            window._vSync = {r: new Set(), ok: false};\n'
-         '            clearTimeout(window._vSyncDebounce);\n'
-         '            window._vSyncDebounce = setTimeout(function() {\n'
-         '                document.querySelectorAll("video.sync-autoplay").forEach(function(v) { v.play().catch(function(){}); });\n'
-         '            }, 50);\n'
-         '        }\n'
+         '        if (window._vSync) { window._vSync = {r: new Set(), ok: false}; }\n'
          '    }\n'
          "}")
 

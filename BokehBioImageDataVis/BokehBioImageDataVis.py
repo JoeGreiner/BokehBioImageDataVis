@@ -690,12 +690,7 @@ class BokehBioImageDataVis:
         callback_slider += f'highlight_df.change.emit();\n'
         callback_slider += f"source.change.emit();\n"
         # Trigger video re-synchronisation after all sources have been updated
-        callback_slider += ("if (window._vSync) {"
-                            " window._vSync = {r: new Set(), ok: false};"
-                            " setTimeout(function() {"
-                            " document.querySelectorAll('video.sync-autoplay').forEach(function(v) { v.play().catch(function(){}); });"
-                            " }, 50);"
-                            " }\n")
+        callback_slider += "if (window._vSync) { window._vSync = {r: new Set(), ok: false}; }\n"
         # callback_slider += f"console.log(manual_id_selection.value);"
 
         callback = CustomJS(
