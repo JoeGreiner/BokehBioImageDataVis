@@ -688,7 +688,9 @@ class BokehBioImageDataVis:
         callback_slider += f'highlight_df.data["highlight_y"][0] = source.data["active_axis_y"][index];\n'
         callback_slider += f'highlight_df.data["last_selected_index"][0] = index;\n'
         callback_slider += f'highlight_df.change.emit();\n'
-        callback_slider += f"source.change.emit();"
+        callback_slider += f"source.change.emit();\n"
+        # Trigger video re-synchronisation after all sources have been updated
+        callback_slider += "if (window._vSync) { window._vSync = {r: new Set(), ok: false}; }\n"
         # callback_slider += f"console.log(manual_id_selection.value);"
 
         callback = CustomJS(
