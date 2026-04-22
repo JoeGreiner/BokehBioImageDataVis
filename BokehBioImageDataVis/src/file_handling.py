@@ -4,8 +4,8 @@ import os
 import shutil
 import uuid
 from os import makedirs
-from os.path import split, join, basename, splitext, exists, dirname, normpath, getsize
-from typing import Any, List, Tuple, cast
+from os.path import abspath, split, join, basename, splitext, exists, dirname, normpath, getsize
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import pandas as pd
 
@@ -39,6 +39,7 @@ def sanitize_media_path_column(df: pd.DataFrame, path_key: str) -> pd.DataFrame:
     df[path_key] = df[path_key].apply(sanitize_media_path_value)
     return df
 
+
 def get_folder_structure(filepath: Any, copy_files_dir_level: int) -> str:
     filepath = sanitize_media_path_value(filepath)
     folders: List[str] = []
@@ -59,14 +60,22 @@ def get_folder_structure(filepath: Any, copy_files_dir_level: int) -> str:
 
 
 def copy_files_to_output_dir(df: pd.DataFrame, path_key: str, output_folder: str,
-                             used_paths: List[str], copy_files_dir_level: int) -> Tuple[pd.DataFrame, List[str]]:
+                             used_paths: List[str], copy_files_dir_level: int,
+                             copied_paths_by_source: Optional[Dict[str, str]] = None) -> Tuple[pd.DataFrame, List[str]]:
     df = sanitize_media_path_column(df, path_key)
+    if copied_paths_by_source is None:
+        copied_paths_by_source = {}
 
     for raw_src_path in df[path_key].unique():
         src_path = cast(str, sanitize_media_path_value(raw_src_path))
 
         if src_path == '':
             logging.warning(f'Warning: empty path. Skipping copy.')
+            continue
+
+        normalized_source_path = abspath(normpath(src_path))
+        if normalized_source_path in copied_paths_by_source:
+            df[path_key] = df[path_key].replace(src_path, copied_paths_by_source[normalized_source_path])
             continue
 
         if not exists(src_path):
@@ -104,6 +113,7 @@ def copy_files_to_output_dir(df: pd.DataFrame, path_key: str, output_folder: str
 
         # update old path to new relative path 'data/...'
         target_path_relative = cast(str, join('data', folder_structure_to_copy, filename))
+        copied_paths_by_source[normalized_source_path] = target_path_relative
 
         # escape # in the path
         df[path_key] = df[path_key].replace(src_path, target_path_relative)

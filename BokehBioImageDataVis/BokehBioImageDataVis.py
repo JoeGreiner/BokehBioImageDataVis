@@ -6,7 +6,7 @@ from os.path import join
 import pandas as pd
 from bokeh.io import show, output_file
 from bokeh.layouts import column, row
-from bokeh.models import ColumnDataSource, CDSView, Select, CustomJS, HoverTool, LayoutDOM, Slider, Button, Div
+from bokeh.models import ColumnDataSource, CDSView, Select, CustomJS, HoverTool, LayoutDOM, Slider, Button, Div, LegendItem
 from bokeh.palettes import Category10, Category20
 from bokeh.plotting import figure
 import logging
@@ -66,13 +66,7 @@ class BokehBioImageDataVis:
 
 
         self.df = df.copy()
-        if add_id_to_dataframe:
-            logging.info('Adding id column to dataframe')
-            # check if id is already present
-            if 'id' in self.df.columns:
-                logging.warning('Can insert id into dataframe, as it is already present!')
-            else:
-                self.df.insert(0, 'id', range(0, len(self.df)))  # can be used with the slider
+        self.add_id_to_dataframe = add_id_to_dataframe
 
         if category_key:
             logging.info(f'Category key: {category_key}')
@@ -124,6 +118,17 @@ class BokehBioImageDataVis:
 
         # touple of id and update function
         self.registered_text_elements = []
+        self.dataset_selector = None
+        self.dataset_sources = []
+        self.dataset_labels = []
+        self.dataset_legend_items = []
+
+        self.scatter_marker_key = 'circle'
+        self.scatter_color_legend_key = None
+        self.scatter_marker_legend_key = None
+        self.row_refresh_js = None
+        self.main_scatter_renderer = None
+        self.scatter_legend = None
 
         # copy needed files relative to the output dir, e.g. for videos
         # makes the visualisation portable, but also increases the size of the output dir
@@ -136,10 +141,14 @@ class BokehBioImageDataVis:
         logging.info(f'Copy files dir level: {copy_files_dir_level}')
         self.copy_files_dir_level = copy_files_dir_level
         self.used_paths = []  # paths that are already used for data saving/copying (so that there are no duplicates appearing)
+        self.copied_paths_by_source = {}  # reuse already copied media when the same source path appears again
 
         self.non_data_keys = []
         self.path_keys = []
-        self.numeric_options = identify_numerical_variables(self.df)
+        numeric_options_df = self.df.copy()
+        if self.add_id_to_dataframe and 'id' not in numeric_options_df.columns:
+            numeric_options_df.insert(0, 'id', range(0, len(numeric_options_df)))
+        self.numeric_options = identify_numerical_variables(numeric_options_df)
 
         if x_axis_key is None:
             self.x_axis_key = self.numeric_options[1]  # options[0] is the id, 1 is the first real numeric option
@@ -186,8 +195,22 @@ class BokehBioImageDataVis:
                     content="Please make sure to unzip the data folder before opening the html file.")
 
     def initialize_data(self):
+        if self.add_id_to_dataframe and 'id' not in self.df.columns:
+            self.df.insert(0, 'id', range(0, len(self.df)))
+
         self.df['active_axis_x'] = self.df[self.x_axis_key]
         self.df['active_axis_y'] = self.df[self.y_axis_key]
+
+        if self.scatter_color_legend_key and self.scatter_marker_legend_key:
+            self.df['legend'] = self.df.apply(
+                lambda x: f'{x[self.scatter_color_legend_key]} {x[self.scatter_marker_legend_key]}', axis=1
+            )
+        elif self.scatter_color_legend_key:
+            self.df['legend'] = self.df[self.scatter_color_legend_key]
+        elif self.scatter_marker_legend_key:
+            self.df['legend'] = self.df[self.scatter_marker_legend_key]
+        elif self.category_key:
+            self.df['legend'] = self.df[self.category_key]
 
         if self.category_key:
             # add a color column to the dataframe, one unique color per category
@@ -228,6 +251,10 @@ class BokehBioImageDataVis:
             )
 
     def create_scatter_figure(self, colorKey=None, markerKey=None, colorLegendKey=None, markerLegendKey=None, scatter_alpha=0.5, highlight_alpha=0.3):
+        self.scatter_marker_key = markerKey or 'circle'
+        self.scatter_color_legend_key = colorLegendKey
+        self.scatter_marker_legend_key = markerLegendKey
+        self.initialize_data()
 
         self.scatter_figure = figure(height=self.scatter_height,
                                     width=self.scatter_width,
@@ -239,57 +266,47 @@ class BokehBioImageDataVis:
                                    source=self.highlight_csd_source, view=self.highlight_csd_view,
                                    size=3 * self.scatter_size, color="red", alpha=highlight_alpha
                                    )
-        if not markerKey:
-            markerKey = 'circle'
-
-        if colorLegendKey and markerLegendKey:
-            self.df['legend'] = self.df.apply(lambda x: f'{x[colorLegendKey]} {x[markerLegendKey]}', axis=1)
-        elif colorLegendKey:
-            self.df['legend'] = self.df[colorLegendKey]
-        elif markerLegendKey:
-            self.df['legend'] = self.df[markerLegendKey]
-        elif self.category_key:
-            self.df['legend'] = self.df[self.category_key]
-        else:
-            logging.warning('No legend key provided, the legend will be empty.')
-
-        # update views after changed legend
-        self.csd_source = ColumnDataSource(data=self.df)
-        self.csd_view = CDSView(source=self.csd_source)
 
         if colorKey:
             logging.info(f'Using {colorKey} as color key and {colorLegendKey} for legend.')
-            self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
-                                       source=self.csd_source, view=self.csd_view,
-                                       size=self.scatter_size,
-                                       alpha=scatter_alpha,
-                                        marker=markerKey,
-                                        color=colorKey, legend_group="legend", name='main_graph'
-                                        )
+            self.main_scatter_renderer = self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
+                                                                     source=self.csd_source, view=self.csd_view,
+                                                                     size=self.scatter_size,
+                                                                     alpha=scatter_alpha,
+                                                                     marker=self.scatter_marker_key,
+                                                                     color=colorKey, legend_group="legend",
+                                                                     name='main_graph')
         elif self.category_key:
             logging.info(f'Using {self.category_key} as color key.')
-            self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
-                                        source=self.csd_source, view=self.csd_view,
-                                        size=self.scatter_size,
-                                        alpha=scatter_alpha,
-                                        marker=markerKey,
-                                       color='color_mapping', legend_group="legend", name='main_graph'
-                                       )
+            self.main_scatter_renderer = self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
+                                                                     source=self.csd_source, view=self.csd_view,
+                                                                     size=self.scatter_size,
+                                                                     alpha=scatter_alpha,
+                                                                     marker=self.scatter_marker_key,
+                                                                     color='color_mapping', legend_group="legend",
+                                                                     name='main_graph')
         else:
-            self.scatter_figure.scatter('active_axis_x', 'active_axis_y',
-                                       source=self.csd_source, view=self.csd_view,
-                                       size=self.scatter_size, name='main_graph',
-                                       alpha=scatter_alpha,
-                                       marker=markerKey,
-                                       )
+            scatter_kwargs = dict(
+                source=self.csd_source,
+                view=self.csd_view,
+                size=self.scatter_size,
+                name='main_graph',
+                alpha=scatter_alpha,
+                marker=self.scatter_marker_key,
+            )
+            if self.scatter_marker_legend_key:
+                scatter_kwargs['legend_group'] = "legend"
+            self.main_scatter_renderer = self.scatter_figure.scatter('active_axis_x', 'active_axis_y', **scatter_kwargs)
 
         if self.scatter_figure.legend:
             if self.legend_position.lower() == "outside":
                 legend_obj = self.scatter_figure.legend[0]
                 self.scatter_figure.legend.remove(legend_obj)
                 self.scatter_figure.add_layout(legend_obj, 'right')
+                self.scatter_legend = legend_obj
             else:
                 self.scatter_figure.legend.location = self.legend_position
+                self.scatter_legend = self.scatter_figure.legend[0]
 
             # change legend background alpha
             self.scatter_figure.legend.background_fill_alpha = 0.5
@@ -297,6 +314,8 @@ class BokehBioImageDataVis:
             self.scatter_figure.legend.title = self.category_key
             if self.legend_title:
                 self.scatter_figure.legend.title = self.legend_title
+        else:
+            self.scatter_legend = None
 
         self.axesselect_x = Select(title="X-Axis:", value=self.x_axis_key, options=self.dropdown_options)
         self.axesselect_x.js_on_change('value',
@@ -333,7 +352,7 @@ class BokehBioImageDataVis:
         self.scatterplot_select_options = column(*controls, width=self.scatterplot_select_options_width)
         self.scatterplot_select_options.css_classes = ["dropdown_controls"]
 
-        return row([self.scatterplot_select_options, self.scatter_figure])
+        return row([self.scatterplot_select_options, Div(text="", width=4), self.scatter_figure])
 
     def add_hover_highlight(self):
         self._require_scatter_figure()
@@ -349,7 +368,7 @@ class BokehBioImageDataVis:
 
         # check if self.manual_id_selection_slider exists
         if hasattr(self, 'manual_id_selection_slider'):
-            code_hover_highlight += "    manual_id_selection.value = source.data['id'][index];\n"
+            code_hover_highlight += "    manual_id_selection.value = index;\n"
 
         code_hover_highlight += "}"
 
@@ -370,6 +389,8 @@ class BokehBioImageDataVis:
 
     def add_image_hover(self, key, height=300, width=300, image_width=None, image_height=None, legend_text="",
                         title=None):
+        if self.dataset_selector is not None:
+            raise RuntimeError("Please add the dataset selector after adding image hovers.")
         self._require_scatter_figure()
         # deprecated: image_width and image_height are not used anymore
         if image_width is not None:
@@ -388,7 +409,8 @@ class BokehBioImageDataVis:
             self.df, self.used_paths = copy_files_to_output_dir(df=self.df, path_key=key,
                                                                 output_folder=self.output_folder,
                                                                 used_paths=self.used_paths,
-                                                                copy_files_dir_level=self.copy_files_dir_level)
+                                                                copy_files_dir_level=self.copy_files_dir_level,
+                                                                copied_paths_by_source=self.copied_paths_by_source)
             self.csd_source.data[key] = self.df[key]
 
         # check if paths exist, if not, copy 'data missing image' and point towards it
@@ -412,11 +434,23 @@ class BokehBioImageDataVis:
         self.csd_source.data[key] = self.df[key]
 
         unique_html_id = uuid.uuid4()
-        self.registered_image_elements.append({'id': unique_html_id, 'key': key, 'legend_text': legend_text})
+        image_update_js = (f'    const path = source.data["{key}"][index].replace(/\\\\/g, "/");\n'
+                           "    const encodedPath = encodeURI(path).replace(/#/g, '%23');\n"
+                           f'    document.getElementById("{unique_html_id}").src = encodedPath;\n')
         div_img, callback_img = image_html_and_callback(unique_html_id=unique_html_id,
                                                         df=self.df, key=key,
                                                         height=height, width=width,
                                                         title=title)
+        self.registered_image_elements.append({
+            'id': unique_html_id,
+            'key': key,
+            'legend_text': legend_text,
+            'div': div_img,
+            'height': height,
+            'width': width,
+            'title': title,
+            'js_update': image_update_js,
+        })
 
         img_JS_callback = CustomJS(args=dict(source=self.csd_source, div=div_img),
                                    code=callback_img)
@@ -578,7 +612,7 @@ class BokehBioImageDataVis:
             overlayDiv.style.fontFamily = "'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif";  
             overlayDiv.style.fontSize = '18px';
             overlayDiv.style.backgroundColor = 'rgba(144, 238, 144, {background_alpha})';
-            overlayDiv.innerHTML = '<b>Id Slider</b>Hint: Click on the slider and use the arrow keys (left/right) explore the data quickly.';
+            overlayDiv.innerHTML = '<b>Row Slider</b>Hint: Click on the slider and use the arrow keys (left/right) explore the data quickly.';
             overlayDiv.style.zIndex = 1000;  // Ensure it's on top
             document.body.appendChild(overlayDiv);
         }}
@@ -653,45 +687,40 @@ class BokehBioImageDataVis:
         return self.toggleLegendButton
 
     def add_slider(self):
+        if self.dataset_selector is not None:
+            raise RuntimeError("Please add the dataset selector after adding the row slider.")
         # prerequisites: all videos/image/text elements have to be registered
         if len(self.df) == 1:
             warnings.warn("Warning: only one data point, slider will not be shown.")
             # return dummywidget
             return Div(text="")
-        self.manual_id_selection_slider = Slider(start=0, end=len(self.df) - 1, value=0, step=1, title="Id",
+        self.manual_id_selection_slider = Slider(start=0, end=len(self.df) - 1, value=0, step=1, title="Row",
                                                  name='id_slider',
                                                  width=self.scatter_width + self.scatterplot_select_options_width)
         self.manual_id_selection_slider.css_classes = ["unique-slider-class"]
 
         hint_div = Div(
             text=(
-                "<b>Hint:</b> After clicking on the slider, you may use arrow keys (←/→) to navigate."
+                "<b>Hint:</b> After clicking on the slider, you may use arrow keys (←/→) to navigate rows."
             )
         )
 
-        callback_slider = "const index = manual_id_selection.value;\n"
+        self.row_refresh_js = ""
         for registered_video_element in self.registered_video_elements:
-            current_key = registered_video_element['key']
-            current_id = registered_video_element['id']
-            # slash replacement is for Windows/Edge compatability
-            callback_slider += f'document.getElementById("{current_id}").src = encodeURI(source.data["{current_key}"][index].replace(/\\\\/g, "/")).replace(/#/g, "%23");\n'
+            self.row_refresh_js += registered_video_element['js_update']
         for registered_image_element in self.registered_image_elements:
-            current_key = registered_image_element['key']
-            current_id = registered_image_element['id']
-            # slash replacement is for Windows/Edge compatability
-            callback_slider += f'document.getElementById("{current_id}").src = encodeURI(source.data["{current_key}"][index].replace(/\\\\/g, "/")).replace(/#/g, "%23");\n'
+            self.row_refresh_js += registered_image_element['js_update']
         for registered_text_element in self.registered_text_elements:
-            current_update_function = registered_text_element['js_update']
-            callback_slider += current_update_function.replace("    ", "")
+            self.row_refresh_js += registered_text_element['js_update']
 
-        callback_slider += f'highlight_df.data["highlight_x"][0] = source.data["active_axis_x"][index];\n'
-        callback_slider += f'highlight_df.data["highlight_y"][0] = source.data["active_axis_y"][index];\n'
-        callback_slider += f'highlight_df.data["last_selected_index"][0] = index;\n'
-        callback_slider += f'highlight_df.change.emit();\n'
-        callback_slider += f"source.change.emit();\n"
+        self.row_refresh_js += 'highlight_df.data["highlight_x"][0] = source.data["active_axis_x"][index];\n'
+        self.row_refresh_js += 'highlight_df.data["highlight_y"][0] = source.data["active_axis_y"][index];\n'
+        self.row_refresh_js += 'highlight_df.data["last_selected_index"][0] = index;\n'
+        self.row_refresh_js += 'highlight_df.change.emit();\n'
+        self.row_refresh_js += "source.change.emit();\n"
         # Trigger video re-synchronisation after all sources have been updated
-        callback_slider += "if (window._vSync) { window._vSync = {r: new Set(), ok: false}; }\n"
-        # callback_slider += f"console.log(manual_id_selection.value);"
+        self.row_refresh_js += "if (window._vSync) { window._vSync = {r: new Set(), ok: false}; }\n"
+        callback_slider = "const index = manual_id_selection.value;\n" + self.row_refresh_js
 
         callback = CustomJS(
             args=dict(source=self.csd_source, manual_id_selection=self.manual_id_selection_slider,
@@ -703,6 +732,8 @@ class BokehBioImageDataVis:
 
     def add_video_hover(self, key, width=300, height=300, video_width=None, video_height=None, legend_text="",
                         title=None, autoplay=True):
+        if self.dataset_selector is not None:
+            raise RuntimeError("Please add the dataset selector after adding video hovers.")
         self._require_scatter_figure()
         # deprecated: video_width & video_height, use width & height instead
         if video_width is not None:
@@ -722,7 +753,8 @@ class BokehBioImageDataVis:
             self.df, self.used_paths = copy_files_to_output_dir(df=self.df, path_key=key,
                                                                 output_folder=self.output_folder,
                                                                 used_paths=self.used_paths,
-                                                                copy_files_dir_level=self.copy_files_dir_level)
+                                                                copy_files_dir_level=self.copy_files_dir_level,
+                                                                copied_paths_by_source=self.copied_paths_by_source)
             self.csd_source.data[key] = self.df[key]
 
 
@@ -746,11 +778,23 @@ class BokehBioImageDataVis:
         self.csd_source.data[key] = self.df[key]
 
         unique_html_id = uuid.uuid4()
-        self.registered_video_elements.append({'id': unique_html_id, 'key': key, 'legend_text': legend_text})
+        video_update_js = (f'    document.getElementById("{unique_html_id}").src = encodeURI(source.data["{key}"][index].replace(/\\\\/g, "/")).replace(/#/g, "%23");\n'
+                           f'    document.getElementById("{unique_html_id}").setAttribute("data-value", index);\n')
         div_video, JS_code = video_html_and_callback(unique_html_id=unique_html_id,
                                                      df=self.df, key=key,
                                                      video_width=width, video_height=height,
                                                      title=title, autoplay=autoplay)
+        self.registered_video_elements.append({
+            'id': unique_html_id,
+            'key': key,
+            'legend_text': legend_text,
+            'div': div_video,
+            'width': width,
+            'height': height,
+            'title': title,
+            'autoplay': autoplay,
+            'js_update': video_update_js,
+        })
 
         video_JS_callback = CustomJS(args=dict(source=self.csd_source, div=div_video),
                                      code=JS_code)
@@ -764,6 +808,8 @@ class BokehBioImageDataVis:
 
     def create_hover_text(self, df_keys_to_show=None, width=500, height=300, container_width=None, container_height=None,
                           remove_path_keys=True, ignore_keys=None):
+        if self.dataset_selector is not None:
+            raise RuntimeError("Please add the dataset selector after adding hover text.")
         self._require_scatter_figure()
         # deprecated: container_width & container_height, use width & height instead
         if container_width is not None:
@@ -797,7 +843,15 @@ class BokehBioImageDataVis:
         div_text.css_classes = ["text_hover_display"]
 
 
-        self.registered_text_elements.append({'id': unique_html_id, 'js_update': js_update_str})
+        self.registered_text_elements.append({
+            'id': unique_html_id,
+            'js_update': js_update_str,
+            'div': div_text,
+            'df_keys_to_show': None if df_keys_to_show is None else list(df_keys_to_show),
+            'df_keys_to_ignore': None if df_keys_to_ignore is None else list(df_keys_to_ignore),
+            'width': width,
+            'height': height,
+        })
 
         callback_text = CustomJS(args=dict(source=self.csd_source, div=div_text),
                                  code=code_text)
@@ -807,3 +861,251 @@ class BokehBioImageDataVis:
         self.scatter_figure.add_tools(hover_text)
 
         return div_text
+
+    def add_dataset_selector(self, datasets, default_dataset=None):
+        self._require_scatter_figure()
+        if self.dataset_selector is not None:
+            raise RuntimeError("A dataset selector has already been added.")
+        if not hasattr(self, 'scatterplot_select_options'):
+            raise RuntimeError("Please call 'create_scatter_figure()' before adding the dataset selector.")
+
+        try:
+            dataset_items = list(datasets.items())
+        except AttributeError as exc:
+            raise TypeError("datasets must be a mapping of dataset label to pandas DataFrame.") from exc
+
+        if len(dataset_items) < 2:
+            raise ValueError("Please provide at least two named datasets.")
+
+        reference_columns = None
+        for dataset_label, dataset_df in dataset_items:
+            if not isinstance(dataset_df, pd.DataFrame):
+                raise TypeError(f"Dataset '{dataset_label}' must be a pandas DataFrame.")
+            if dataset_df.empty:
+                raise ValueError(f"Dataset '{dataset_label}' is empty. Empty datasets are not supported.")
+            if reference_columns is None:
+                reference_columns = list(dataset_df.columns)
+            elif list(dataset_df.columns) != reference_columns:
+                raise ValueError("All datasets must have the same columns and column order.")
+
+        if default_dataset is None:
+            default_dataset = dataset_items[0][0]
+        if default_dataset not in dict(dataset_items):
+            raise ValueError(f"Default dataset '{default_dataset}' was not found in datasets.")
+
+        live_df = self.df
+        live_source = self.csd_source
+        live_view = self.csd_view
+
+        dataset_sources = []
+        dataset_labels = []
+        dataset_legend_items = []
+
+        for dataset_label, dataset_df in dataset_items:
+            self.df = dataset_df.copy()
+            self.initialize_data()
+
+            for path_key in self.path_keys:
+                self.df = sanitize_media_path_column(self.df, path_key)
+                self.csd_source.data[path_key] = self.df[path_key]
+
+                if self.do_copy_files_to_output_dir:
+                    self.df, self.used_paths = copy_files_to_output_dir(
+                        df=self.df,
+                        path_key=path_key,
+                        output_folder=self.output_folder,
+                        used_paths=self.used_paths,
+                        copy_files_dir_level=self.copy_files_dir_level,
+                        copied_paths_by_source=self.copied_paths_by_source,
+                    )
+                    self.csd_source.data[path_key] = self.df[path_key]
+
+                if any(element['key'] == path_key for element in self.registered_image_elements):
+                    missing_data_filename = 'data_missing.png'
+                    output_path_missing = join(self.output_folder, 'data', missing_data_filename)
+                    if not os.path.exists(os.path.dirname(output_path_missing)):
+                        os.makedirs(os.path.dirname(output_path_missing))
+                    if not os.path.exists(output_path_missing):
+                        shutil.copyfile(
+                            join(os.path.dirname(__file__), 'resources', 'MissingDataIcon.png'),
+                            output_path_missing,
+                        )
+
+                    for path_img in self.df[path_key]:
+                        if not os.path.exists(join(self.output_folder, path_img)):
+                            logging.warning(f'Path {path_img} does not exist. Replacing with data missing image.')
+                            self.df[path_key] = self.df[path_key].replace(path_img, f'data/{missing_data_filename}')
+                        if not path_img:
+                            logging.warning(f'Path {path_img} is empty. Replacing with data missing image.')
+                            self.df[path_key] = self.df[path_key].replace(path_img, f'data/{missing_data_filename}')
+
+                if any(element['key'] == path_key for element in self.registered_video_elements):
+                    missing_data_filename = 'data_missing.mp4'
+                    output_path_missing = join(self.output_folder, 'data', missing_data_filename)
+                    if not os.path.exists(os.path.dirname(output_path_missing)):
+                        os.makedirs(os.path.dirname(output_path_missing))
+                    if not os.path.exists(output_path_missing):
+                        shutil.copyfile(
+                            join(os.path.dirname(__file__), 'resources', 'MissingDataVideo.mp4'),
+                            output_path_missing,
+                        )
+
+                    for path_video in self.df[path_key]:
+                        if not os.path.exists(join(self.output_folder, path_video)):
+                            logging.warning(f'Path {path_video} does not exist. Replacing with data missing video.')
+                            self.df[path_key] = self.df[path_key].replace(path_video, f'data/{missing_data_filename}')
+                        if not path_video:
+                            logging.warning(f'Path {path_video} is empty. Replacing with data missing video.')
+                            self.df[path_key] = self.df[path_key].replace(path_video, f'data/{missing_data_filename}')
+
+                self.csd_source.data[path_key] = self.df[path_key]
+
+            legend_items = []
+            if self.scatter_legend is not None and self.main_scatter_renderer is not None and 'legend' in self.df.columns:
+                first_index_by_label = {}
+                for row_index, legend_label in enumerate(self.df['legend'].tolist()):
+                    if legend_label not in first_index_by_label:
+                        first_index_by_label[legend_label] = row_index
+                for legend_label, row_index in first_index_by_label.items():
+                    legend_items.append(LegendItem(
+                        label={'value': str(legend_label)},
+                        renderers=[self.main_scatter_renderer],
+                        index=row_index,
+                    ))
+
+            dataset_labels.append(dataset_label)
+            dataset_sources.append(self.csd_source)
+            dataset_legend_items.append(legend_items)
+
+        self.df = live_df
+        self.csd_source = live_source
+        self.csd_view = live_view
+        self.dataset_labels = dataset_labels
+        self.dataset_sources = dataset_sources
+        self.dataset_legend_items = dataset_legend_items
+
+        refresh_row_js = self.row_refresh_js
+        if refresh_row_js is None:
+            refresh_row_js = ""
+            for registered_video_element in self.registered_video_elements:
+                refresh_row_js += registered_video_element['js_update']
+            for registered_image_element in self.registered_image_elements:
+                refresh_row_js += registered_image_element['js_update']
+            for registered_text_element in self.registered_text_elements:
+                refresh_row_js += registered_text_element['js_update']
+            refresh_row_js += 'highlight_df.data["highlight_x"][0] = source.data["active_axis_x"][index];\n'
+            refresh_row_js += 'highlight_df.data["highlight_y"][0] = source.data["active_axis_y"][index];\n'
+            refresh_row_js += 'highlight_df.data["last_selected_index"][0] = index;\n'
+            refresh_row_js += 'highlight_df.change.emit();\n'
+            refresh_row_js += "source.change.emit();\n"
+            refresh_row_js += "if (window._vSync) { window._vSync = {r: new Set(), ok: false}; }\n"
+
+        selector_args = dict(
+            source=self.csd_source,
+            highlight_df=self.highlight_csd_source,
+            dataset_selector=None,
+            dataset_labels=self.dataset_labels,
+            dataset_sources=self.dataset_sources,
+            axesselect_x=self.axesselect_x,
+            axesselect_y=self.axesselect_y,
+        )
+        if self.scatter_legend is not None:
+            selector_args['legend'] = self.scatter_legend
+            selector_args['dataset_legend_items'] = self.dataset_legend_items
+        if hasattr(self, 'manual_id_selection_slider'):
+            selector_args['manual_id_selection'] = self.manual_id_selection_slider
+
+        selector_code = """
+        const dataset_index = dataset_labels.indexOf(dataset_selector.value);
+        const selected_source = dataset_sources[dataset_index];
+        const new_data = {};
+        for (const [key, value] of Object.entries(selected_source.data)) {
+            new_data[key] = value.slice ? value.slice() : value;
+        }
+        source.data = new_data;
+        source.data['active_axis_x'] = source.data[axesselect_x.value];
+        source.data['active_axis_y'] = source.data[axesselect_y.value];
+        """
+        if self.scatter_legend is not None:
+            selector_code += """
+        const selected_legend_items = dataset_legend_items[dataset_index];
+        legend.items = selected_legend_items;
+        legend.visible = selected_legend_items.length > 0;
+        legend.change.emit();
+        """
+        if hasattr(self, 'manual_id_selection_slider'):
+            selector_code += """
+        const row_count = source.data["active_axis_x"].length;
+        manual_id_selection.start = 0;
+        manual_id_selection.end = Math.max(row_count - 1, 0);
+        manual_id_selection.value = 0;
+        """
+        selector_code += "const index = 0;\n" + refresh_row_js
+
+        self.dataset_selector = Select(
+            title="Dataset:",
+            value=default_dataset,
+            options=self.dataset_labels,
+            width=self.scatterplot_select_options_width,
+        )
+        selector_args['dataset_selector'] = self.dataset_selector
+        self.dataset_selector.js_on_change('value', CustomJS(args=selector_args, code=selector_code))
+        self.scatterplot_select_options.children = [self.dataset_selector] + list(self.scatterplot_select_options.children)
+
+        default_source = self.dataset_sources[self.dataset_labels.index(default_dataset)]
+        self.csd_source.data = {
+            key: value.copy() if hasattr(value, 'copy') else value
+            for key, value in default_source.data.items()
+        }
+        if self.scatter_legend is not None:
+            default_legend_items = self.dataset_legend_items[self.dataset_labels.index(default_dataset)]
+            self.scatter_legend.items = default_legend_items
+            self.scatter_legend.visible = len(default_legend_items) > 0
+        self.df = pd.DataFrame(self.csd_source.data)
+        self.highlight_csd_source.data = {
+            'highlight_x': [self.csd_source.data['active_axis_x'][0]],
+            'highlight_y': [self.csd_source.data['active_axis_y'][0]],
+            'last_selected_index': [0],
+        }
+
+        if hasattr(self, 'manual_id_selection_slider'):
+            self.manual_id_selection_slider.start = 0
+            self.manual_id_selection_slider.end = len(self.df) - 1
+            self.manual_id_selection_slider.value = 0
+
+        for registered_image_element in self.registered_image_elements:
+            image_div, _ = image_html_and_callback(
+                unique_html_id=registered_image_element['id'],
+                df=self.df,
+                key=registered_image_element['key'],
+                height=registered_image_element['height'],
+                width=registered_image_element['width'],
+                title=registered_image_element['title'],
+            )
+            registered_image_element['div'].text = image_div.text
+
+        for registered_video_element in self.registered_video_elements:
+            video_div, _ = video_html_and_callback(
+                unique_html_id=registered_video_element['id'],
+                df=self.df,
+                key=registered_video_element['key'],
+                video_width=registered_video_element['width'],
+                video_height=registered_video_element['height'],
+                title=registered_video_element['title'],
+                autoplay=registered_video_element['autoplay'],
+            )
+            registered_video_element['div'].text = video_div.text
+
+        for registered_text_element in self.registered_text_elements:
+            text_div, _, _ = text_html_and_callback(
+                unique_id=registered_text_element['id'],
+                df=self.df,
+                df_keys_to_show=registered_text_element['df_keys_to_show'],
+                df_keys_to_ignore=registered_text_element['df_keys_to_ignore'],
+                width=registered_text_element['width'],
+                height=registered_text_element['height'],
+                float_precision=self.scatter_data_hover_float_precision,
+            )
+            registered_text_element['div'].text = text_div.text
+
+        return self.dataset_selector
