@@ -112,7 +112,7 @@ def copy_files_to_output_dir(df: pd.DataFrame, path_key: str, output_folder: str
         # check if file exists already, if so, check if it has the same size
         # if equal, skip copy
         if exists(target_path) and (getsize(src_path) == getsize(target_path)):
-            logging.info(f'Info: {target_path} already exists and has the same size. Skipping copy.')
+            logging.debug(f'Info: {target_path} already exists and has the same size. Skipping copy.')
         else:
             shutil.copyfile(src_path, target_path)
 
