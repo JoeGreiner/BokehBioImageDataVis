@@ -22,7 +22,6 @@ def identify_numerical_variables(df):
     for key in list(df.keys()):
         if detect_if_key_is_numeric(df, key):
             numeric_options.append(key)
-    print(numeric_options)
     return numeric_options
 
 def download_files_simple_example_1():
