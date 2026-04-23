@@ -151,6 +151,7 @@ class BokehBioImageDataVis:
         self.copied_paths_by_source = {}  # reuse already copied media when the same source path appears again
         self.generated_media_keys = set()
         self.stacked_video_specs = {}
+        self.stacked_video_output_cache = {}
 
         self.non_data_keys = []
         self.path_keys = []
@@ -559,18 +560,47 @@ class BokehBioImageDataVis:
         self._run_ffmpeg_stream(ffmpeg_stream, f'ffmpeg stacked video export for {output_filename}')
         return output_path_relative
 
-    def _materialize_stacked_video_column(self, key):
+    def _prepare_media_key_for_dataset(self, key, prepared_media_keys=None, prefer_video=False):
+        if prepared_media_keys is not None and key in prepared_media_keys:
+            return
+
+        if key in self.stacked_video_specs:
+            self._materialize_stacked_video_column(key, prepared_media_keys=prepared_media_keys)
+        elif prefer_video:
+            self._prepare_video_column(key)
+        elif any(element['key'] == key for element in self.registered_image_elements):
+            self._prepare_image_column(key)
+        else:
+            self._prepare_video_column(key)
+
+        if prepared_media_keys is not None:
+            prepared_media_keys.add(key)
+
+    def _materialize_stacked_video_column(self, key, prepared_media_keys=None):
         spec = self.stacked_video_specs[key]
         for source_key in spec['keys']:
-            self._prepare_video_column(source_key)
+            self._prepare_media_key_for_dataset(
+                source_key,
+                prepared_media_keys=prepared_media_keys,
+                prefer_video=True,
+            )
 
         stacked_video_paths = []
+        stacked_video_cache = self.stacked_video_output_cache.setdefault(key, {})
         for row_index in range(len(self.df)):
-            row_input_paths = [self.df[source_key].iloc[row_index] for source_key in spec['keys']]
-            stacked_video_paths.append(self._build_stacked_video_output(row_input_paths, spec))
+            row_input_paths = tuple(
+                sanitize_media_path_value(self.df[source_key].iloc[row_index])
+                for source_key in spec['keys']
+            )
+            if row_input_paths not in stacked_video_cache:
+                stacked_video_cache[row_input_paths] = self._build_stacked_video_output(row_input_paths, spec)
+            stacked_video_paths.append(stacked_video_cache[row_input_paths])
 
         self.df[key] = stacked_video_paths
         self.csd_source.data[key] = self.df[key]
+
+        if prepared_media_keys is not None:
+            prepared_media_keys.add(key)
 
     def create_scatter_figure(self, colorKey=None, markerKey=None, colorLegendKey=None, markerLegendKey=None, scatter_alpha=0.5, highlight_alpha=0.3):
         self.scatter_marker_key = markerKey or 'circle'
@@ -1210,14 +1240,10 @@ class BokehBioImageDataVis:
         for dataset_label, dataset_df in dataset_items:
             self.df = dataset_df.copy()
             self.initialize_data()
+            prepared_media_keys = set()
 
             for path_key in self.path_keys:
-                if path_key in self.stacked_video_specs:
-                    self._materialize_stacked_video_column(path_key)
-                elif any(element['key'] == path_key for element in self.registered_image_elements):
-                    self._prepare_image_column(path_key)
-                else:
-                    self._prepare_video_column(path_key)
+                self._prepare_media_key_for_dataset(path_key, prepared_media_keys=prepared_media_keys)
 
             legend_items = []
             if self.scatter_legend is not None and self.main_scatter_renderer is not None and 'legend' in self.df.columns:
