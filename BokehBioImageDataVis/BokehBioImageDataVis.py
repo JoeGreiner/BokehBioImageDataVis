@@ -261,6 +261,9 @@ class BokehBioImageDataVis:
                 "Please call 'create_scatter_figure()' before adding hovers, text, sliders, or legends."
             )
 
+    def _scope_js_update(self, js_update):
+        return "{\n" + js_update + "}\n"
+
     def _remember_media_key(self, key):
         if key not in self.non_data_keys:
             self.non_data_keys.append(key)
@@ -338,6 +341,38 @@ class BokehBioImageDataVis:
                 self.df[key] = self.df[key].replace(path_video, missing_path_relative)
 
         self.csd_source.data[key] = self.df[key]
+
+    def _get_auto_video_height(self, key, display_width):
+        if not display_width:
+            return 300
+
+        missing_path_relative, missing_video_abs = self._ensure_missing_video_placeholder()
+        missing_video_abs = os.path.abspath(missing_video_abs)
+
+        reference_video_abs = None
+        for path_value in self.df[key]:
+            resolved_path = self._resolve_media_path(path_value)
+            if not resolved_path or not os.path.exists(resolved_path):
+                continue
+            normalized_path = os.path.abspath(resolved_path)
+            if normalized_path == missing_video_abs:
+                continue
+            reference_video_abs = normalized_path
+            break
+
+        if reference_video_abs is None:
+            placeholder_resolved = self._resolve_media_path(missing_path_relative)
+            reference_video_abs = os.path.abspath(placeholder_resolved)
+
+        try:
+            video_info = self._probe_video_info(reference_video_abs)
+            return max(1, round(display_width * video_info['height'] / video_info['width']))
+        except Exception:
+            logging.warning(
+                "Could not auto-compute video hover height for %s. Falling back to 300px.",
+                key,
+            )
+            return 300
 
     def _ensure_ffmpeg_tools_available(self):
         for tool_name in ('ffmpeg', 'ffprobe'):
@@ -1077,11 +1112,11 @@ class BokehBioImageDataVis:
 
         self.row_refresh_js = ""
         for registered_video_element in self.registered_video_elements:
-            self.row_refresh_js += registered_video_element['js_update']
+            self.row_refresh_js += self._scope_js_update(registered_video_element['js_update'])
         for registered_image_element in self.registered_image_elements:
-            self.row_refresh_js += registered_image_element['js_update']
+            self.row_refresh_js += self._scope_js_update(registered_image_element['js_update'])
         for registered_text_element in self.registered_text_elements:
-            self.row_refresh_js += registered_text_element['js_update']
+            self.row_refresh_js += self._scope_js_update(registered_text_element['js_update'])
 
         self.row_refresh_js += 'highlight_df.data["highlight_x"][0] = source.data["active_axis_x"][index];\n'
         self.row_refresh_js += 'highlight_df.data["highlight_y"][0] = source.data["active_axis_y"][index];\n'
@@ -1115,6 +1150,8 @@ class BokehBioImageDataVis:
 
         self._remember_media_key(key)
         self._prepare_video_column(key)
+        if height is None:
+            height = self._get_auto_video_height(key, width)
 
         unique_html_id = uuid.uuid4()
         video_update_js = (f'    document.getElementById("{unique_html_id}").src = encodeURI(source.data["{key}"][index].replace(/\\\\/g, "/")).replace(/#/g, "%23");\n'
@@ -1321,11 +1358,11 @@ class BokehBioImageDataVis:
         if refresh_row_js is None:
             refresh_row_js = ""
             for registered_video_element in self.registered_video_elements:
-                refresh_row_js += registered_video_element['js_update']
+                refresh_row_js += self._scope_js_update(registered_video_element['js_update'])
             for registered_image_element in self.registered_image_elements:
-                refresh_row_js += registered_image_element['js_update']
+                refresh_row_js += self._scope_js_update(registered_image_element['js_update'])
             for registered_text_element in self.registered_text_elements:
-                refresh_row_js += registered_text_element['js_update']
+                refresh_row_js += self._scope_js_update(registered_text_element['js_update'])
             refresh_row_js += 'highlight_df.data["highlight_x"][0] = source.data["active_axis_x"][index];\n'
             refresh_row_js += 'highlight_df.data["highlight_y"][0] = source.data["active_axis_y"][index];\n'
             refresh_row_js += 'highlight_df.data["last_selected_index"][0] = index;\n'
