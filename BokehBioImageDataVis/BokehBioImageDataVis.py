@@ -152,6 +152,7 @@ class BokehBioImageDataVis:
         self.generated_media_keys = set()
         self.stacked_video_specs = {}
         self.stacked_video_output_cache = {}
+        self.stacked_video_reference_info_cache = {}
 
         self.non_data_keys = []
         self.path_keys = []
@@ -424,6 +425,72 @@ class BokehBioImageDataVis:
             'fps_text': frame_rate_text,
         }
 
+    def _get_uniform_stacked_video_reference_info(self, spec):
+        cache_key = spec['key']
+        if cache_key in self.stacked_video_reference_info_cache:
+            return dict(self.stacked_video_reference_info_cache[cache_key])
+
+        _, missing_video_abs = self._ensure_missing_video_placeholder()
+        missing_video_abs = os.path.abspath(missing_video_abs)
+
+        candidate_paths = []
+        seen_candidate_paths = set()
+        for source_key in spec['keys']:
+            if source_key not in self.df.columns:
+                raise KeyError(f"Could not find stacked source key '{source_key}' in the dataframe.")
+            for path_value in self.df[source_key]:
+                resolved_path = self._resolve_media_path(path_value)
+                if not resolved_path or not os.path.exists(resolved_path):
+                    continue
+                normalized_path = os.path.abspath(resolved_path)
+                if normalized_path == missing_video_abs or normalized_path in seen_candidate_paths:
+                    continue
+                seen_candidate_paths.add(normalized_path)
+                candidate_paths.append(normalized_path)
+
+        sample_paths = candidate_paths[:5]
+        sample_infos = [self._probe_video_info(sample_path) for sample_path in sample_paths]
+
+        if sample_infos:
+            reference_path = sample_paths[0]
+            reference_info = sample_infos[0]
+            for sample_path, sample_info in zip(sample_paths[1:], sample_infos[1:]):
+                mismatch_messages = []
+                if sample_info['width'] != reference_info['width']:
+                    mismatch_messages.append(f"width {reference_info['width']} vs {sample_info['width']}")
+                if sample_info['height'] != reference_info['height']:
+                    mismatch_messages.append(f"height {reference_info['height']} vs {sample_info['height']}")
+                if sample_info['frame_count'] != reference_info['frame_count']:
+                    mismatch_messages.append(
+                        f"frame_count {reference_info['frame_count']} vs {sample_info['frame_count']}"
+                    )
+                if sample_info['fps'] != reference_info['fps']:
+                    mismatch_messages.append(f"fps {reference_info['fps_text']} vs {sample_info['fps_text']}")
+                if mismatch_messages:
+                    raise RuntimeError(
+                        'Stacked video fast-path assumption failed during sample validation. '
+                        f"Reference sample '{reference_path}' and sampled video '{sample_path}' disagree on "
+                        + ', '.join(mismatch_messages)
+                        + '.'
+                    )
+            print(
+                f"Stacked video fast path assumption for {cache_key}: sampled {len(sample_paths)} real videos, "
+                f"assuming shared size={reference_info['width']}x{reference_info['height']}, "
+                f"frames={reference_info['frame_count']}, fps={reference_info['fps_text']}; "
+                "skipping per-input ffprobe."
+            )
+        else:
+            reference_info = self._probe_video_info(missing_video_abs)
+            print(
+                f"Stacked video fast path assumption for {cache_key}: found no real videos, using the missing-video "
+                f"placeholder as reference with size={reference_info['width']}x{reference_info['height']}, "
+                f"frames={reference_info['frame_count']}, fps={reference_info['fps_text']}; "
+                "skipping per-input ffprobe."
+            )
+
+        self.stacked_video_reference_info_cache[cache_key] = dict(reference_info)
+        return dict(reference_info)
+
     def _build_stacked_video_output(self, input_paths, spec):
         _, missing_video_abs = self._ensure_missing_video_placeholder()
         missing_video_abs = os.path.abspath(missing_video_abs)
@@ -435,28 +502,9 @@ class BokehBioImageDataVis:
                 resolved_input_path = missing_video_abs
             resolved_input_paths.append(os.path.abspath(resolved_input_path))
 
-        video_infos = [self._probe_video_info(path) for path in resolved_input_paths]
-        real_video_infos = [
-            (path, info) for path, info in zip(resolved_input_paths, video_infos)
-            if path != missing_video_abs
-        ]
-
-        reference_info = real_video_infos[0][1] if real_video_infos else None
-        if reference_info is not None:
-            for _, info in real_video_infos[1:]:
-                if info['frame_count'] != reference_info['frame_count']:
-                    raise RuntimeError(
-                        'Stacked video inputs must have the same exact number of frames. '
-                        f'Found {reference_info["frame_count"]} and {info["frame_count"]} frames.'
-                    )
-                if info['fps'] != reference_info['fps']:
-                    raise RuntimeError(
-                        'Stacked video inputs must have the same exact average frame rate. '
-                        f'Found {reference_info["fps_text"]} and {info["fps_text"]}.'
-                    )
-
-        cell_width = max(info['width'] for info in video_infos)
-        cell_height = max(info['height'] for info in video_infos)
+        reference_info = self._get_uniform_stacked_video_reference_info(spec)
+        cell_width = reference_info['width']
+        cell_height = reference_info['height']
 
         output_kwargs = resolve_ffmpeg_output_kwargs(
             spec['encoding'],
@@ -469,8 +517,8 @@ class BokehBioImageDataVis:
         cache_payload = {
             'stack': spec['stack'],
             'encoding': spec['encoding'],
-            'frame_count': None if reference_info is None else reference_info['frame_count'],
-            'fps_text': None if reference_info is None else reference_info['fps_text'],
+            'frame_count': reference_info['frame_count'],
+            'fps_text': reference_info['fps_text'],
             'cell_width': cell_width,
             'cell_height': cell_height,
             'output_kwargs': output_kwargs,
@@ -498,7 +546,7 @@ class BokehBioImageDataVis:
         if os.path.exists(output_path_absolute):
             return output_path_relative
 
-        needs_placeholder_normalization = reference_info is not None
+        needs_placeholder_normalization = True
         input_signatures = [
             (input_path, needs_placeholder_normalization and input_path == missing_video_abs)
             for input_path in resolved_input_paths
