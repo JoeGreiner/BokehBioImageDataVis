@@ -117,6 +117,9 @@ Running the code should open the website shown below. If the website does not au
 * [examples/4_named_datasets.py](examples/4_named_datasets.py)
   Switching between named datasets while keeping the same layout and linked widgets.
 
+* [examples/5_stacked_video_hovers.py](examples/5_stacked_video_hovers.py)
+  Stacked video hovers for semantic grouping/forced synchronisation.
+
 ## FAQ [🏠](#-table-of-contents)
 
 * How do I generate media (automatically)?

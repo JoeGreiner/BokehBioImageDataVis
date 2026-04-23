@@ -73,6 +73,11 @@ def copy_files_to_output_dir(df: pd.DataFrame, path_key: str, output_folder: str
             logging.warning(f'Warning: empty path. Skipping copy.')
             continue
 
+        output_local_path = normpath(join(output_folder, src_path))
+        if not os.path.isabs(src_path) and exists(output_local_path):
+            logging.debug(f'Info: {src_path} already exists inside the output folder. Skipping copy.')
+            continue
+
         normalized_source_path = abspath(normpath(src_path))
         if normalized_source_path in copied_paths_by_source:
             df[path_key] = df[path_key].replace(src_path, copied_paths_by_source[normalized_source_path])

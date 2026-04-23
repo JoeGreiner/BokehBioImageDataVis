@@ -1,8 +1,13 @@
+import hashlib
+import json
 import os.path
 import shutil
 import uuid
 import warnings
+from collections import Counter, defaultdict
+from fractions import Fraction
 from os.path import join
+import ffmpeg
 import pandas as pd
 from bokeh.io import show, output_file
 from bokeh.layouts import column, row
@@ -14,7 +19,9 @@ import logging
 from BokehBioImageDataVis.src.bokeh_helpers.get_bokeh_images_base64 import get_pan_tool_image, get_rect_zoom_image, \
     get_mouse_wheel_image, get_reset_image, get_hover_tool_image
 from BokehBioImageDataVis.src.colormapping import random_color
-from BokehBioImageDataVis.src.file_handling import copy_files_to_output_dir, create_file, sanitize_media_path_column
+from BokehBioImageDataVis.src.ffmpeg_config import build_ffmpeg_output_stream, resolve_ffmpeg_output_kwargs
+from BokehBioImageDataVis.src.file_handling import copy_files_to_output_dir, create_file, sanitize_media_path_column, \
+    sanitize_media_path_value
 from BokehBioImageDataVis.src.html_snippets import image_html_and_callback, text_html_and_callback, \
     video_html_and_callback
 from BokehBioImageDataVis.src.utils import identify_numerical_variables
@@ -142,6 +149,8 @@ class BokehBioImageDataVis:
         self.copy_files_dir_level = copy_files_dir_level
         self.used_paths = []  # paths that are already used for data saving/copying (so that there are no duplicates appearing)
         self.copied_paths_by_source = {}  # reuse already copied media when the same source path appears again
+        self.generated_media_keys = set()
+        self.stacked_video_specs = {}
 
         self.non_data_keys = []
         self.path_keys = []
@@ -249,6 +258,319 @@ class BokehBioImageDataVis:
                 "No scatter figure has been created yet. "
                 "Please call 'create_scatter_figure()' before adding hovers, text, sliders, or legends."
             )
+
+    def _remember_media_key(self, key):
+        if key not in self.non_data_keys:
+            self.non_data_keys.append(key)
+        if key not in self.path_keys:
+            self.path_keys.append(key)
+
+    def _resolve_media_path(self, path_value):
+        path_value = sanitize_media_path_value(path_value)
+        if not path_value:
+            return ''
+        if os.path.isabs(path_value):
+            return path_value
+        return join(self.output_folder, path_value)
+
+    def _ensure_missing_image_placeholder(self):
+        missing_data_icon = 'data_missing.png'
+        output_path_missing = join(self.output_folder, 'data', missing_data_icon)
+        if not os.path.exists(os.path.dirname(output_path_missing)):
+            os.makedirs(os.path.dirname(output_path_missing))
+        if not os.path.exists(output_path_missing):
+            shutil.copyfile(join(os.path.dirname(__file__), 'resources', 'MissingDataIcon.png'), output_path_missing)
+        return join('data', missing_data_icon), output_path_missing
+
+    def _ensure_missing_video_placeholder(self):
+        missing_data_mp4 = 'data_missing.mp4'
+        output_path_missing = join(self.output_folder, 'data', missing_data_mp4)
+        if not os.path.exists(os.path.dirname(output_path_missing)):
+            os.makedirs(os.path.dirname(output_path_missing))
+        if not os.path.exists(output_path_missing):
+            shutil.copyfile(join(os.path.dirname(__file__), 'resources', 'MissingDataVideo.mp4'), output_path_missing)
+        return join('data', missing_data_mp4), output_path_missing
+
+    def _prepare_image_column(self, key):
+        if key not in self.df.columns:
+            raise KeyError(f"Could not find image key '{key}' in the dataframe.")
+
+        self.df = sanitize_media_path_column(self.df, key)
+        self.csd_source.data[key] = self.df[key]
+
+        if self.do_copy_files_to_output_dir and key not in self.generated_media_keys:
+            self.df, self.used_paths = copy_files_to_output_dir(df=self.df, path_key=key,
+                                                                output_folder=self.output_folder,
+                                                                used_paths=self.used_paths,
+                                                                copy_files_dir_level=self.copy_files_dir_level,
+                                                                copied_paths_by_source=self.copied_paths_by_source)
+            self.csd_source.data[key] = self.df[key]
+
+        missing_path_relative, _ = self._ensure_missing_image_placeholder()
+        for path_img in self.df[key]:
+            if not path_img or not os.path.exists(self._resolve_media_path(path_img)):
+                logging.warning(f'Path {path_img} does not exist. Replacing with data missing image.')
+                self.df[key] = self.df[key].replace(path_img, missing_path_relative)
+
+        self.csd_source.data[key] = self.df[key]
+
+    def _prepare_video_column(self, key):
+        if key not in self.df.columns:
+            raise KeyError(f"Could not find video key '{key}' in the dataframe.")
+
+        self.df = sanitize_media_path_column(self.df, key)
+        self.csd_source.data[key] = self.df[key]
+
+        if self.do_copy_files_to_output_dir and key not in self.generated_media_keys:
+            self.df, self.used_paths = copy_files_to_output_dir(df=self.df, path_key=key,
+                                                                output_folder=self.output_folder,
+                                                                used_paths=self.used_paths,
+                                                                copy_files_dir_level=self.copy_files_dir_level,
+                                                                copied_paths_by_source=self.copied_paths_by_source)
+            self.csd_source.data[key] = self.df[key]
+
+        missing_path_relative, _ = self._ensure_missing_video_placeholder()
+        for path_video in self.df[key]:
+            if not path_video or not os.path.exists(self._resolve_media_path(path_video)):
+                logging.warning(f'Path {path_video} does not exist. Replacing with data missing video.')
+                self.df[key] = self.df[key].replace(path_video, missing_path_relative)
+
+        self.csd_source.data[key] = self.df[key]
+
+    def _ensure_ffmpeg_tools_available(self):
+        for tool_name in ('ffmpeg', 'ffprobe'):
+            if shutil.which(tool_name) is None:
+                raise RuntimeError(
+                    f"Could not find '{tool_name}' on PATH. "
+                    "Please install ffmpeg/ffprobe to use stacked video hovers."
+                )
+
+    def _format_ffmpeg_error(self, exc):
+        stderr = getattr(exc, 'stderr', b'')
+        stdout = getattr(exc, 'stdout', b'')
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode('utf-8', errors='replace')
+        if isinstance(stdout, bytes):
+            stdout = stdout.decode('utf-8', errors='replace')
+        stderr = (stderr or '').strip()
+        stdout = (stdout or '').strip()
+        return stderr or stdout or 'No additional error output available.'
+
+    def _run_ffmpeg_stream(self, stream, description):
+        try:
+            (
+                stream
+                .global_args('-loglevel', 'error')
+                .overwrite_output()
+                .run(capture_stdout=True, capture_stderr=True)
+            )
+        except ffmpeg.Error as exc:
+            raise RuntimeError(f'{description} failed.\n{self._format_ffmpeg_error(exc)}') from exc
+
+    def _probe_video_info(self, video_path):
+        self._ensure_ffmpeg_tools_available()
+        try:
+            probe_data = ffmpeg.probe(
+                video_path,
+                cmd='ffprobe',
+                select_streams='v:0',
+                count_frames=None,
+                show_entries='stream=width,height,avg_frame_rate,nb_read_frames',
+            )
+        except ffmpeg.Error as exc:
+            raise RuntimeError(f'ffprobe for {video_path} failed.\n{self._format_ffmpeg_error(exc)}') from exc
+
+        stream_info = (probe_data.get('streams') or [None])[0]
+        if stream_info is None:
+            raise RuntimeError(f'Could not find a video stream in {video_path}.')
+
+        frame_rate_text = str(stream_info.get('avg_frame_rate', ''))
+        if frame_rate_text in ('', '0/0'):
+            raise RuntimeError(f'Could not determine the average frame rate for {video_path}.')
+
+        frame_count_text = str(stream_info.get('nb_read_frames', ''))
+        if frame_count_text in ('', 'N/A'):
+            raise RuntimeError(
+                f'Could not determine the exact number of frames for {video_path}. '
+                'Stacked video hovers require an exact frame count.'
+            )
+
+        try:
+            frame_count = int(frame_count_text)
+        except ValueError as exc:
+            raise RuntimeError(f'Could not parse the frame count for {video_path}: {frame_count_text}') from exc
+
+        try:
+            fps = Fraction(frame_rate_text)
+        except (ValueError, ZeroDivisionError) as exc:
+            raise RuntimeError(f'Could not parse the frame rate for {video_path}: {frame_rate_text}') from exc
+
+        if frame_count <= 0:
+            raise RuntimeError(f'Video {video_path} does not contain any frames.')
+        if fps <= 0:
+            raise RuntimeError(f'Video {video_path} has an invalid frame rate: {frame_rate_text}.')
+
+        width = stream_info.get('width')
+        height = stream_info.get('height')
+        if width is None or height is None:
+            raise RuntimeError(f'Could not determine the frame size for {video_path}.')
+
+        return {
+            'width': int(width),
+            'height': int(height),
+            'frame_count': frame_count,
+            'fps': fps,
+            'fps_text': frame_rate_text,
+        }
+
+    def _build_stacked_video_output(self, input_paths, spec):
+        _, missing_video_abs = self._ensure_missing_video_placeholder()
+        missing_video_abs = os.path.abspath(missing_video_abs)
+
+        resolved_input_paths = []
+        for input_path in input_paths:
+            resolved_input_path = self._resolve_media_path(input_path)
+            if not resolved_input_path or not os.path.exists(resolved_input_path):
+                resolved_input_path = missing_video_abs
+            resolved_input_paths.append(os.path.abspath(resolved_input_path))
+
+        video_infos = [self._probe_video_info(path) for path in resolved_input_paths]
+        real_video_infos = [
+            (path, info) for path, info in zip(resolved_input_paths, video_infos)
+            if path != missing_video_abs
+        ]
+
+        reference_info = real_video_infos[0][1] if real_video_infos else None
+        if reference_info is not None:
+            for _, info in real_video_infos[1:]:
+                if info['frame_count'] != reference_info['frame_count']:
+                    raise RuntimeError(
+                        'Stacked video inputs must have the same exact number of frames. '
+                        f'Found {reference_info["frame_count"]} and {info["frame_count"]} frames.'
+                    )
+                if info['fps'] != reference_info['fps']:
+                    raise RuntimeError(
+                        'Stacked video inputs must have the same exact average frame rate. '
+                        f'Found {reference_info["fps_text"]} and {info["fps_text"]}.'
+                    )
+
+        cell_width = max(info['width'] for info in video_infos)
+        cell_height = max(info['height'] for info in video_infos)
+
+        output_kwargs = resolve_ffmpeg_output_kwargs(
+            spec['encoding'],
+            ffmpeg_crf=spec['ffmpeg_crf'],
+            ffmpeg_preset=spec['ffmpeg_preset'],
+            ffmpeg_options=spec['ffmpeg_options'],
+            extra_output_kwargs={'an': None},
+        )
+
+        cache_payload = {
+            'stack': spec['stack'],
+            'encoding': spec['encoding'],
+            'frame_count': None if reference_info is None else reference_info['frame_count'],
+            'fps_text': None if reference_info is None else reference_info['fps_text'],
+            'cell_width': cell_width,
+            'cell_height': cell_height,
+            'output_kwargs': output_kwargs,
+            'inputs': [
+                {
+                    'path': path,
+                    'size': os.path.getsize(path),
+                    'mtime': os.path.getmtime(path),
+                }
+                for path in resolved_input_paths
+            ],
+        }
+
+        merged_video_dir = join(self.output_folder, 'data', 'merged_videos')
+        if not os.path.exists(merged_video_dir):
+            os.makedirs(merged_video_dir)
+
+        cache_hash = hashlib.sha256(
+            json.dumps(cache_payload, sort_keys=True, default=str).encode('utf-8')
+        ).hexdigest()[:24]
+        output_filename = f'stacked_{cache_hash}.mp4'
+        output_path_absolute = join(merged_video_dir, output_filename)
+        output_path_relative = join('data', 'merged_videos', output_filename)
+
+        if os.path.exists(output_path_absolute):
+            return output_path_relative
+
+        needs_placeholder_normalization = reference_info is not None
+        input_signatures = [
+            (input_path, needs_placeholder_normalization and input_path == missing_video_abs)
+            for input_path in resolved_input_paths
+        ]
+        signature_counts = Counter(input_signatures)
+        signature_usage = defaultdict(int)
+        base_streams_by_signature = {}
+        for signature, count in signature_counts.items():
+            path, loop_input = signature
+            input_kwargs = {}
+            if loop_input:
+                input_kwargs['stream_loop'] = -1
+            base_stream = ffmpeg.input(path, **input_kwargs).video
+            if count == 1:
+                base_streams_by_signature[signature] = [base_stream]
+            else:
+                split_stream = base_stream.filter_multi_output('split')
+                base_streams_by_signature[signature] = [split_stream[index] for index in range(count)]
+
+        prepared_streams = []
+        for signature in input_signatures:
+            branch_index = signature_usage[signature]
+            signature_usage[signature] += 1
+            stream = base_streams_by_signature[signature][branch_index]
+            if reference_info is not None:
+                stream = stream.filter('fps', reference_info['fps_text'])
+                stream = stream.filter('trim', end_frame=reference_info['frame_count'])
+            stream = stream.filter('setpts', 'PTS-STARTPTS')
+            stream = stream.filter(
+                'scale',
+                cell_width,
+                cell_height,
+                force_original_aspect_ratio='decrease',
+            )
+            stream = stream.filter(
+                'pad',
+                cell_width,
+                cell_height,
+                '(ow-iw)/2',
+                '(oh-ih)/2',
+                color='white',
+            )
+            stream = stream.filter('setsar', '1')
+            prepared_streams.append(stream)
+
+        stack_operator = 'vstack' if spec['stack'] == 'column' else 'hstack'
+        stacked_stream = ffmpeg.filter(prepared_streams, stack_operator, inputs=len(prepared_streams))
+        stacked_stream = stacked_stream.filter('pad', 'ceil(iw/2)*2', 'ceil(ih/2)*2', color='white')
+
+        ffmpeg_stream = build_ffmpeg_output_stream(
+            stacked_stream,
+            output_path=output_path_absolute,
+            encoding=spec['encoding'],
+            ffmpeg_crf=spec['ffmpeg_crf'],
+            ffmpeg_preset=spec['ffmpeg_preset'],
+            ffmpeg_options=spec['ffmpeg_options'],
+            extra_output_kwargs={'an': None},
+        )
+        self._run_ffmpeg_stream(ffmpeg_stream, f'ffmpeg stacked video export for {output_filename}')
+        return output_path_relative
+
+    def _materialize_stacked_video_column(self, key):
+        spec = self.stacked_video_specs[key]
+        for source_key in spec['keys']:
+            self._prepare_video_column(source_key)
+
+        stacked_video_paths = []
+        for row_index in range(len(self.df)):
+            row_input_paths = [self.df[source_key].iloc[row_index] for source_key in spec['keys']]
+            stacked_video_paths.append(self._build_stacked_video_output(row_input_paths, spec))
+
+        self.df[key] = stacked_video_paths
+        self.csd_source.data[key] = self.df[key]
 
     def create_scatter_figure(self, colorKey=None, markerKey=None, colorLegendKey=None, markerLegendKey=None, scatter_alpha=0.5, highlight_alpha=0.3):
         self.scatter_marker_key = markerKey or 'circle'
@@ -400,38 +722,8 @@ class BokehBioImageDataVis:
             height = image_height
             logging.warning("image_height is deprecated and not used anymore. Use height instead")
 
-        self.non_data_keys.append(key)
-        self.path_keys.append(key)
-        self.df = sanitize_media_path_column(self.df, key)
-        self.csd_source.data[key] = self.df[key]
-
-        if self.do_copy_files_to_output_dir:
-            self.df, self.used_paths = copy_files_to_output_dir(df=self.df, path_key=key,
-                                                                output_folder=self.output_folder,
-                                                                used_paths=self.used_paths,
-                                                                copy_files_dir_level=self.copy_files_dir_level,
-                                                                copied_paths_by_source=self.copied_paths_by_source)
-            self.csd_source.data[key] = self.df[key]
-
-        # check if paths exist, if not, copy 'data missing image' and point towards it
-        # this is necessary because some browser do not show the broken image symbol, but display the last working image
-        missing_data_icon = 'data_missing.png'
-        output_path_missing = join(self.output_folder, 'data', missing_data_icon)
-        if not os.path.exists(os.path.dirname(output_path_missing)):
-            os.makedirs(os.path.dirname(output_path_missing))
-        # copy the data missing image to the output folder
-        if not os.path.exists(output_path_missing):
-            shutil.copyfile(join(os.path.dirname(__file__), 'resources', 'MissingDataIcon.png'), output_path_missing)
-
-        for path_img in self.df[key]:
-            if not os.path.exists(join(self.output_folder, path_img)):
-                logging.warning(f'Path {path_img} does not exist. Replacing with data missing image.')
-                self.df[key] = self.df[key].replace(path_img, f'data/{missing_data_icon}')
-            if not path_img:
-                logging.warning(f'Path {path_img} is empty. Replacing with data missing image.')
-                self.df[key] = self.df[key].replace(path_img, f'data/{missing_data_icon}')
-
-        self.csd_source.data[key] = self.df[key]
+        self._remember_media_key(key)
+        self._prepare_image_column(key)
 
         unique_html_id = uuid.uuid4()
         image_update_js = (f'    const path = source.data["{key}"][index].replace(/\\\\/g, "/");\n'
@@ -743,39 +1035,8 @@ class BokehBioImageDataVis:
             logging.warning("video_height is deprecated, use height instead")
             height = video_height
 
-
-        self.non_data_keys.append(key)
-        self.path_keys.append(key)
-        self.df = sanitize_media_path_column(self.df, key)
-        self.csd_source.data[key] = self.df[key]
-
-        if self.do_copy_files_to_output_dir:
-            self.df, self.used_paths = copy_files_to_output_dir(df=self.df, path_key=key,
-                                                                output_folder=self.output_folder,
-                                                                used_paths=self.used_paths,
-                                                                copy_files_dir_level=self.copy_files_dir_level,
-                                                                copied_paths_by_source=self.copied_paths_by_source)
-            self.csd_source.data[key] = self.df[key]
-
-
-        # check if paths exist, if not, copy 'data missing video' and point towards it
-        # this is necessary because some browser do funky stuff
-        missing_data_mp4 = 'data_missing.mp4'
-        output_path_missing = join(self.output_folder, 'data', missing_data_mp4)
-        if not os.path.exists(os.path.dirname(output_path_missing)):
-            os.makedirs(os.path.dirname(output_path_missing))
-        # copy the data missing image to the output folder
-        if not os.path.exists(output_path_missing):
-            shutil.copyfile(join(os.path.dirname(__file__), 'resources', 'MissingDataVideo.mp4'), output_path_missing)
-
-        for path_video in self.df[key]:
-            if not os.path.exists(join(self.output_folder, path_video)):
-                logging.warning(f'Path {path_video} does not exist. Replacing with data missing video.')
-                self.df[key] = self.df[key].replace(path_video, f'data/{missing_data_mp4}')
-            if not path_video:
-                logging.warning(f'Path {path_video} is empty. Replacing with data missing image.')
-                self.df[key] = self.df[key].replace(path_video, f'data/{missing_data_mp4}')
-        self.csd_source.data[key] = self.df[key]
+        self._remember_media_key(key)
+        self._prepare_video_column(key)
 
         unique_html_id = uuid.uuid4()
         video_update_js = (f'    document.getElementById("{unique_html_id}").src = encodeURI(source.data["{key}"][index].replace(/\\\\/g, "/")).replace(/#/g, "%23");\n'
@@ -805,6 +1066,51 @@ class BokehBioImageDataVis:
         self.scatter_figure.add_tools(video_hover_tool)
 
         return div_video
+
+    def add_stacked_video_hover(self, keys, stack="column", width=300, height=300, video_width=None,
+                                video_height=None, legend_text="", title=None, autoplay=True,
+                                encoding="h264", ffmpeg_crf=None, ffmpeg_preset=None, ffmpeg_options=None):
+        if self.dataset_selector is not None:
+            raise RuntimeError("Please add the dataset selector after adding stacked video hovers.")
+        self._require_scatter_figure()
+
+        if isinstance(keys, str):
+            raise TypeError("keys must be a sequence of dataframe columns, not a single string.")
+
+        keys = list(keys)
+        if len(keys) < 2:
+            raise ValueError("Please provide at least two video keys to stack.")
+        if stack not in ("column", "row"):
+            raise ValueError("stack must be either 'column' or 'row'.")
+
+        for key in keys:
+            if key not in self.df.columns:
+                raise KeyError(f"Could not find video key '{key}' in the dataframe.")
+            self._remember_media_key(key)
+
+        stacked_key = f'_stacked_video_{uuid.uuid4().hex}'
+        self.generated_media_keys.add(stacked_key)
+        self.stacked_video_specs[stacked_key] = {
+            'key': stacked_key,
+            'keys': keys,
+            'stack': stack,
+            'encoding': encoding,
+            'ffmpeg_crf': ffmpeg_crf,
+            'ffmpeg_preset': ffmpeg_preset,
+            'ffmpeg_options': None if ffmpeg_options is None else dict(ffmpeg_options),
+        }
+        self._materialize_stacked_video_column(stacked_key)
+
+        return self.add_video_hover(
+            key=stacked_key,
+            width=width,
+            height=height,
+            video_width=video_width,
+            video_height=video_height,
+            legend_text=legend_text,
+            title=title,
+            autoplay=autoplay,
+        )
 
     def create_hover_text(self, df_keys_to_show=None, width=500, height=300, container_width=None, container_height=None,
                           remove_path_keys=True, ignore_keys=None):
@@ -906,59 +1212,12 @@ class BokehBioImageDataVis:
             self.initialize_data()
 
             for path_key in self.path_keys:
-                self.df = sanitize_media_path_column(self.df, path_key)
-                self.csd_source.data[path_key] = self.df[path_key]
-
-                if self.do_copy_files_to_output_dir:
-                    self.df, self.used_paths = copy_files_to_output_dir(
-                        df=self.df,
-                        path_key=path_key,
-                        output_folder=self.output_folder,
-                        used_paths=self.used_paths,
-                        copy_files_dir_level=self.copy_files_dir_level,
-                        copied_paths_by_source=self.copied_paths_by_source,
-                    )
-                    self.csd_source.data[path_key] = self.df[path_key]
-
-                if any(element['key'] == path_key for element in self.registered_image_elements):
-                    missing_data_filename = 'data_missing.png'
-                    output_path_missing = join(self.output_folder, 'data', missing_data_filename)
-                    if not os.path.exists(os.path.dirname(output_path_missing)):
-                        os.makedirs(os.path.dirname(output_path_missing))
-                    if not os.path.exists(output_path_missing):
-                        shutil.copyfile(
-                            join(os.path.dirname(__file__), 'resources', 'MissingDataIcon.png'),
-                            output_path_missing,
-                        )
-
-                    for path_img in self.df[path_key]:
-                        if not os.path.exists(join(self.output_folder, path_img)):
-                            logging.warning(f'Path {path_img} does not exist. Replacing with data missing image.')
-                            self.df[path_key] = self.df[path_key].replace(path_img, f'data/{missing_data_filename}')
-                        if not path_img:
-                            logging.warning(f'Path {path_img} is empty. Replacing with data missing image.')
-                            self.df[path_key] = self.df[path_key].replace(path_img, f'data/{missing_data_filename}')
-
-                if any(element['key'] == path_key for element in self.registered_video_elements):
-                    missing_data_filename = 'data_missing.mp4'
-                    output_path_missing = join(self.output_folder, 'data', missing_data_filename)
-                    if not os.path.exists(os.path.dirname(output_path_missing)):
-                        os.makedirs(os.path.dirname(output_path_missing))
-                    if not os.path.exists(output_path_missing):
-                        shutil.copyfile(
-                            join(os.path.dirname(__file__), 'resources', 'MissingDataVideo.mp4'),
-                            output_path_missing,
-                        )
-
-                    for path_video in self.df[path_key]:
-                        if not os.path.exists(join(self.output_folder, path_video)):
-                            logging.warning(f'Path {path_video} does not exist. Replacing with data missing video.')
-                            self.df[path_key] = self.df[path_key].replace(path_video, f'data/{missing_data_filename}')
-                        if not path_video:
-                            logging.warning(f'Path {path_video} is empty. Replacing with data missing video.')
-                            self.df[path_key] = self.df[path_key].replace(path_video, f'data/{missing_data_filename}')
-
-                self.csd_source.data[path_key] = self.df[path_key]
+                if path_key in self.stacked_video_specs:
+                    self._materialize_stacked_video_column(path_key)
+                elif any(element['key'] == path_key for element in self.registered_image_elements):
+                    self._prepare_image_column(path_key)
+                else:
+                    self._prepare_video_column(path_key)
 
             legend_items = []
             if self.scatter_legend is not None and self.main_scatter_renderer is not None and 'legend' in self.df.columns:

@@ -9,7 +9,7 @@ setup(name='BokehBioImageDataVis',
       license='MIT',
       packages=find_packages(),
       install_requires=[
-          'bokeh<3', 'pandas', 'numpy<2', 'requests'
+          'bokeh<3', 'pandas', 'numpy<2', 'requests', 'ffmpeg-python'
       ],
       package_data={
         'BokehBioImageDataVis': ['resources/*.png', 'resources/*.mp4']
