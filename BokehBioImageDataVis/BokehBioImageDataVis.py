@@ -22,9 +22,15 @@ from BokehBioImageDataVis.src.colormapping import random_color
 from BokehBioImageDataVis.src.ffmpeg_config import build_ffmpeg_output_stream, resolve_ffmpeg_output_kwargs
 from BokehBioImageDataVis.src.file_handling import copy_files_to_output_dir, create_file, sanitize_media_path_column, \
     sanitize_media_path_value
-from BokehBioImageDataVis.src.html_snippets import image_html_and_callback, text_html_and_callback, \
-    video_html_and_callback
+from BokehBioImageDataVis.src.html_snippets import BBDV_DOM_HELPER_JS, image_html_and_callback, \
+    text_html_and_callback, video_html_and_callback
 from BokehBioImageDataVis.src.utils import identify_numerical_variables
+
+
+def _make_cds_view(source):
+    if 'source' in CDSView.properties():
+        return CDSView(source=source)
+    return CDSView()
 
 
 class BokehBioImageDataVis:
@@ -244,7 +250,7 @@ class BokehBioImageDataVis:
                                         self.df[self.category_key]]
 
         self.csd_source = ColumnDataSource(data=self.df)
-        self.csd_view = CDSView(source=self.csd_source)
+        self.csd_view = _make_cds_view(self.csd_source)
 
     def initialize_highlighter(self, init_index=0):
         self.highlight_df = pd.DataFrame({'highlight_x': [self.df['active_axis_x'].iloc[init_index]],
@@ -252,7 +258,7 @@ class BokehBioImageDataVis:
                                           'last_selected_index': [0]})
 
         self.highlight_csd_source = ColumnDataSource(data=self.highlight_df)
-        self.highlight_csd_view = CDSView(source=self.highlight_csd_source)
+        self.highlight_csd_view = _make_cds_view(self.highlight_csd_source)
 
     def _require_scatter_figure(self):
         if self.scatter_figure is None:
@@ -263,6 +269,39 @@ class BokehBioImageDataVis:
 
     def _scope_js_update(self, js_update):
         return "{\n" + js_update + "}\n"
+
+    def _make_hover_tool(self, callback):
+        if self.main_scatter_renderer is None:
+            raise RuntimeError("Please call 'create_scatter_figure()' before adding hover tools.")
+        return HoverTool(tooltips=None, callback=callback, renderers=[self.main_scatter_renderer])
+
+    def _registered_div_args(self):
+        div_args = {}
+        for registered_element in (
+            self.registered_video_elements + self.registered_image_elements + self.registered_text_elements
+        ):
+            div_arg = registered_element.get('div_arg')
+            if div_arg is not None:
+                div_args[div_arg] = registered_element['div']
+        return div_args
+
+    def _video_sync_count(self):
+        return max(1, sum(1 for element in self.registered_video_elements if element.get('autoplay')))
+
+    def _refresh_registered_video_divs(self):
+        sync_count = self._video_sync_count()
+        for registered_video_element in self.registered_video_elements:
+            video_div, _ = video_html_and_callback(
+                unique_html_id=registered_video_element['id'],
+                df=self.df,
+                key=registered_video_element['key'],
+                video_width=registered_video_element['width'],
+                video_height=registered_video_element['height'],
+                title=registered_video_element['title'],
+                autoplay=registered_video_element['autoplay'],
+                sync_count=sync_count,
+            )
+            registered_video_element['div'].text = video_div.text
 
     def _remember_media_key(self, key):
         if key not in self.non_data_keys:
@@ -817,8 +856,7 @@ class BokehBioImageDataVis:
                 args=dict(source=self.csd_source, highlight_df=self.highlight_csd_source),
                 code=code_hover_highlight)
 
-        img_hover_tool = HoverTool(tooltips=None, names=['main_graph'])
-        img_hover_tool.callback = img_js_callback
+        img_hover_tool = self._make_hover_tool(img_js_callback)
 
         self.scatter_figure.add_tools(img_hover_tool)
 
@@ -839,9 +877,13 @@ class BokehBioImageDataVis:
         self._prepare_image_column(key)
 
         unique_html_id = uuid.uuid4()
+        div_arg = f'image_div_{len(self.registered_image_elements)}'
         image_update_js = (f'    const path = source.data["{key}"][index].replace(/\\\\/g, "/");\n'
                            "    const encodedPath = encodeURI(path).replace(/#/g, '%23');\n"
-                           f'    document.getElementById("{unique_html_id}").src = encodedPath;\n')
+                           f'    const imageElement = bbdv_find_element({div_arg}, "{unique_html_id}");\n'
+                           "    if (imageElement != null) {\n"
+                           "        imageElement.src = encodedPath;\n"
+                           "    }\n")
         div_img, callback_img = image_html_and_callback(unique_html_id=unique_html_id,
                                                         df=self.df, key=key,
                                                         height=height, width=width,
@@ -855,13 +897,13 @@ class BokehBioImageDataVis:
             'width': width,
             'title': title,
             'js_update': image_update_js,
+            'div_arg': div_arg,
         })
 
         img_JS_callback = CustomJS(args=dict(source=self.csd_source, div=div_img),
                                    code=callback_img)
 
-        img_hover_tool = HoverTool(tooltips=None, names=['main_graph'])
-        img_hover_tool.callback = img_JS_callback
+        img_hover_tool = self._make_hover_tool(img_JS_callback)
 
         self.scatter_figure.add_tools(img_hover_tool)
 
@@ -871,40 +913,28 @@ class BokehBioImageDataVis:
         width_button = (self.scatter_width + self.scatterplot_select_options_width) // 2
         self.toggleVideoButton = Button(label="Toggle Pause/Play Videos", button_type="success",
                                          css_classes=["video-toggle-button"], width = width_button)
-        button_code_video = """
-        var videos = document.getElementsByTagName('video');
-        console.log(videos);
-        for (var i = 0; i < videos.length; i++) {
-            if (videos[i].paused) {
-                videos[i].play();
+        button_code_video = BBDV_DOM_HELPER_JS + """
+        const videos = bbdv_registered_videos(video_divs);
+        for (const video of videos) {
+            if (video.paused) {
+                video.play().catch(function(){});
             } else {
-              videos[i].pause();
+                video.pause();
             }
         }
         """
 
-        self.toggleVideoButton.js_on_click(CustomJS(code=button_code_video))
+        self.toggleVideoButton.js_on_click(
+            CustomJS(args=dict(video_divs=[element['div'] for element in self.registered_video_elements]),
+                     code=button_code_video)
+        )
         return self.toggleVideoButton
 
 
     def add_legend(self, background_alpha=0.75):
-        toggle_js = """
-        var button = document.querySelector('.highlight-button button');
-        if (button.innerText == "Show Legend") {
-            button.innerText = "Hide Legend";
-            button.classList.remove("bk-btn-success");
-            button.classList.add("bk-btn-warning");
-        } else {
-            button.innerText = "Show Legend";
-            button.classList.remove("bk-btn-warning");
-            button.classList.add("bk-btn-success");
-        }
-        """
-
         width_button = (self.scatter_width + self.scatterplot_select_options_width) // 2
         self.toggleLegendButton = Button(label="Show Legend", button_type="success",
                                          css_classes=["highlight-button"], width = width_button)
-        self.toggleLegendButton.js_on_click(CustomJS(code=toggle_js))
 
 
         ids_of_img = [str(thing['id']) for thing in self.registered_image_elements]
@@ -913,6 +943,7 @@ class BokehBioImageDataVis:
         text_of_vids = [thing['legend_text'] for thing in self.registered_video_elements]
         ids = ids_of_img + ids_of_vids
         text = text_of_img + text_of_vids
+        media_divs = [thing['div'] for thing in self.registered_image_elements + self.registered_video_elements]
 
         # replace accidentals \n with br
         text = [t.replace('\n', '<br>') for t in text]
@@ -926,21 +957,54 @@ class BokehBioImageDataVis:
                           f'<p><img src={get_hover_tool_image()}></img>Toggle mouse hover interaction to videos/images.</p>'
                           )
 
-        button_code = ''
-        button_code_media = f"""
-        const imageIds = {ids};
-        const texts = {text};
+        button_code = BBDV_DOM_HELPER_JS + f"""
+        function bbdv_toggle_body_overlay(model, className, html, fontSize, fontWeight) {{
+            const existingOverlay = document.body.querySelector("." + className);
+            if (existingOverlay != null) {{
+                existingOverlay.remove();
+                return;
+            }}
+            const modelElement = bbdv_model_el(model);
+            if (modelElement == null) {{
+                return;
+            }}
+            const rect = modelElement.getBoundingClientRect();
+            const overlayDiv = document.createElement("div");
+            overlayDiv.className = className;
+            overlayDiv.style.pointerEvents = "none";
+            overlayDiv.style.position = "absolute";
+            overlayDiv.style.top = (rect.top + window.scrollY) + "px";
+            overlayDiv.style.left = (rect.left + window.scrollX) + "px";
+            overlayDiv.style.width = rect.width + "px";
+            overlayDiv.style.height = rect.height + "px";
+            overlayDiv.style.display = "flex";
+            overlayDiv.style.flexDirection = "column";
+            overlayDiv.style.alignItems = "center";
+            overlayDiv.style.justifyContent = "center";
+            overlayDiv.style.textAlign = "center";
+            overlayDiv.style.fontWeight = fontWeight;
+            overlayDiv.style.fontFamily = "'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif";
+            overlayDiv.style.fontSize = fontSize;
+            overlayDiv.style.backgroundColor = "rgba(144, 238, 144, {background_alpha})";
+            overlayDiv.style.zIndex = 1000;
+            overlayDiv.innerHTML = html;
+            document.body.appendChild(overlayDiv);
+        }}
 
-        for (let i = 0; i < imageIds.length; i++) {{
-            const imgElement = document.getElementById(imageIds[i]);
-            const parentDiv = imgElement.parentElement;
+        const mediaIds = {json.dumps(ids)};
+        const mediaTexts = {json.dumps(text)};
+
+        for (let i = 0; i < mediaIds.length; i++) {{
+            const mediaElement = bbdv_find_element(media_divs[i], mediaIds[i]);
+            if (mediaElement == null) {{
+                continue;
+            }}
+            const parentDiv = mediaElement.parentElement;
             if (parentDiv) {{
                 const overlayText = parentDiv.querySelector('.overlay-text');
                 if (overlayText) {{
-                    // If the overlay text exists, remove it
                     overlayText.remove();
                 }} else {{
-                    // If the overlay text doesn't exist, add it
                     parentDiv.style.position = 'relative';
                     const overlayDiv = document.createElement('div');
                     overlayDiv.className = 'overlay-text';
@@ -955,139 +1019,66 @@ class BokehBioImageDataVis:
                     overlayDiv.style.fontWeight = 'bold';
                     overlayDiv.style.fontSize = '22px';
                     overlayDiv.style.backgroundColor = 'rgba(144, 238, 144, {background_alpha})';
-                    overlayDiv.innerHTML = texts[i];
+                    overlayDiv.innerHTML = mediaTexts[i];
                     parentDiv.appendChild(overlayDiv);
                 }}
             }}
         }}
-        """
-        button_code_scatter = f"""
-        // code for the scatter plot legend        
-        const canvasElement = document.querySelector('.bk-canvas-events');
-        const parentOfCanvas = canvasElement.parentElement;
-        const overlay = parentOfCanvas.querySelector('.overlay-text');
-        
-        if (overlay) {{
-            overlay.remove();
+
+        bbdv_toggle_body_overlay(
+            scatter_plot,
+            "overlay-text-scatter",
+            {json.dumps(legend_scatter)},
+            "22px",
+            "bold",
+        );
+
+        if (slider_models.length > 0) {{
+            bbdv_toggle_body_overlay(
+                slider_models[0],
+                "overlay-text-slider",
+                "<b>Row Slider</b>Hint: Click on the slider and use the arrow keys (left/right) explore the data quickly.",
+                "18px",
+                "inherit",
+            );
+        }}
+
+        bbdv_toggle_body_overlay(
+            dropdown_model,
+            "overlay-dropdown",
+            "Change Axes.",
+            "18px",
+            "bold",
+        );
+
+        if (text_hover_divs.length > 0) {{
+            bbdv_toggle_body_overlay(
+                text_hover_divs[0],
+                "overlay-text-hover",
+                "Additional data on selected/hovered-on scatter point.",
+                "24px",
+                "bold",
+            );
+        }}
+
+        if (button.label == "Show Legend") {{
+            button.label = "Hide Legend";
+            button.button_type = "warning";
         }} else {{
-            const overlayDiv = document.createElement('div');
-            overlayDiv.className = 'overlay-text';
-            overlayDiv.style.pointerEvents = 'none';
-            overlayDiv.style.position = 'absolute';
-            overlayDiv.style.top = '0';
-            overlayDiv.style.left = '0';
-            overlayDiv.style.width = '100%';
-            overlayDiv.style.height = '100%';
-            overlayDiv.style.display = 'flex';
-            overlayDiv.style.flexDirection = 'column';
-            overlayDiv.style.alignItems = 'center';
-            overlayDiv.style.justifyContent = 'center';
-            overlayDiv.style.textAlign = 'center';
-            overlayDiv.style.fontWeight = 'bold';
-            overlayDiv.style.fontSize = '22px';
-            overlayDiv.style.backgroundColor = 'rgba(144, 238, 144, {background_alpha})';
-            overlayDiv.innerHTML = '{legend_scatter}';
-            parentOfCanvas.style.position = 'relative';
-            parentOfCanvas.appendChild(overlayDiv);
+            button.label = "Show Legend";
+            button.button_type = "success";
         }}
         """
 
-        button_code_slider = f"""
-        const sliderElement = document.querySelector('.unique-slider-class');
-        const sliderRect = sliderElement.getBoundingClientRect();
-        const sliderOverlay = document.body.querySelector('.overlay-text-slider');
-
-        if (sliderOverlay) {{
-            sliderOverlay.remove();
-        }} else {{
-            const overlayDiv = document.createElement('div');
-            overlayDiv.className = 'overlay-text-slider';
-            overlayDiv.style.pointerEvents = 'none';
-            overlayDiv.style.position = 'absolute';
-            overlayDiv.style.top = sliderRect.top + 'px';
-            overlayDiv.style.left = sliderRect.left + 'px';
-            overlayDiv.style.width = sliderRect.width + 'px';
-            overlayDiv.style.height = sliderRect.height + 'px';
-            overlayDiv.style.display = 'flex';
-            overlayDiv.style.flexDirection = 'column';
-            overlayDiv.style.alignItems = 'center';
-            overlayDiv.style.justifyContent = 'center';
-            overlayDiv.style.textAlign = 'center';
-            overlayDiv.style.fontWeight = 'inherit';
-            overlayDiv.style.fontFamily = "'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif";  
-            overlayDiv.style.fontSize = '18px';
-            overlayDiv.style.backgroundColor = 'rgba(144, 238, 144, {background_alpha})';
-            overlayDiv.innerHTML = '<b>Row Slider</b>Hint: Click on the slider and use the arrow keys (left/right) explore the data quickly.';
-            overlayDiv.style.zIndex = 1000;  // Ensure it's on top
-            document.body.appendChild(overlayDiv);
-        }}
-        """
-
-
-        button_code_selection = f"""
-        const dropDownElement = document.querySelector('.dropdown_controls');
-        const rect = dropDownElement.getBoundingClientRect();
-        const dropDownOverlay = document.body.querySelector('.overlay-dropdown');
-
-        if (dropDownOverlay) {{
-            dropDownOverlay.remove();
-        }} else {{
-            const overlayDiv = document.createElement('div');
-            overlayDiv.className = 'overlay-dropdown';
-            overlayDiv.style.pointerEvents = 'none';
-            overlayDiv.style.position = 'absolute';
-            overlayDiv.style.top = rect.top + 'px';
-            overlayDiv.style.left = rect.left + 'px';
-            overlayDiv.style.width = rect.width + 'px';
-            overlayDiv.style.height = rect.height + 'px';
-            overlayDiv.style.display = 'flex';
-            overlayDiv.style.flexDirection = 'column';
-            overlayDiv.style.alignItems = 'center';
-            overlayDiv.style.justifyContent = 'center';
-            overlayDiv.style.textAlign = 'center';
-            overlayDiv.style.fontWeight = 'bold';
-            overlayDiv.style.fontFamily = "'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif";  
-            overlayDiv.style.fontSize = '18px';
-            overlayDiv.style.backgroundColor = 'rgba(144, 238, 144, {background_alpha})';
-            overlayDiv.innerHTML = 'Change Axes.';
-            overlayDiv.style.zIndex = 1000;  // Ensure it's on top
-            document.body.appendChild(overlayDiv);
-        }}
-        """
-
-        button_code_text_hover = f"""
-        const textHoverElement = document.querySelector('.text_hover_display');
-        const textHoverRect = textHoverElement.getBoundingClientRect();
-        const textHoverOverlay = document.body.querySelector('.overlay-text-hover');
-
-        if (textHoverOverlay) {{
-            textHoverOverlay.remove();
-        }} else {{
-            const overlayDiv = document.createElement('div');
-            overlayDiv.className = 'overlay-text-hover';
-            overlayDiv.style.pointerEvents = 'none';
-            overlayDiv.style.position = 'absolute';
-            overlayDiv.style.top = textHoverRect.top + 'px';
-            overlayDiv.style.left = textHoverRect.left + 'px';
-            overlayDiv.style.width = textHoverRect.width + 'px';
-            overlayDiv.style.height = textHoverRect.height + 'px';
-            overlayDiv.style.display = 'flex';
-            overlayDiv.style.flexDirection = 'column';
-            overlayDiv.style.alignItems = 'center';
-            overlayDiv.style.justifyContent = 'center';
-            overlayDiv.style.textAlign = 'center';
-            overlayDiv.style.fontWeight = 'bold';
-            overlayDiv.style.fontFamily = "'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif";  
-            overlayDiv.style.fontSize = '24px';
-            overlayDiv.style.backgroundColor = 'rgba(144, 238, 144, {background_alpha})';
-            overlayDiv.innerHTML = 'Additional data on selected/hovered-on scatter point.';
-            overlayDiv.style.zIndex = 1000;  // Ensure it's on top
-            document.body.appendChild(overlayDiv);
-        }}
-        """
-
-        button_code += button_code_media + button_code_scatter + button_code_slider + button_code_selection + button_code_text_hover
-        self.toggleLegendButton.js_on_click(CustomJS(code=button_code))
+        legend_args = dict(
+            button=self.toggleLegendButton,
+            media_divs=media_divs,
+            scatter_plot=self.scatter_figure,
+            dropdown_model=self.scatterplot_select_options,
+            slider_models=[self.manual_id_selection_slider] if hasattr(self, 'manual_id_selection_slider') else [],
+            text_hover_divs=[element['div'] for element in self.registered_text_elements],
+        )
+        self.toggleLegendButton.js_on_click(CustomJS(args=legend_args, code=button_code))
 
         return self.toggleLegendButton
 
@@ -1125,12 +1116,12 @@ class BokehBioImageDataVis:
         self.row_refresh_js += "source.change.emit();\n"
         # Trigger video re-synchronisation after all sources have been updated
         self.row_refresh_js += "if (window._vSync) { window._vSync = {r: new Set(), ok: false}; }\n"
-        callback_slider = "const index = manual_id_selection.value;\n" + self.row_refresh_js
+        callback_slider = BBDV_DOM_HELPER_JS + "const index = manual_id_selection.value;\n" + self.row_refresh_js
 
-        callback = CustomJS(
-            args=dict(source=self.csd_source, manual_id_selection=self.manual_id_selection_slider,
-                      highlight_df=self.highlight_csd_source),
-            code=callback_slider)
+        callback_args = dict(source=self.csd_source, manual_id_selection=self.manual_id_selection_slider,
+                             highlight_df=self.highlight_csd_source)
+        callback_args.update(self._registered_div_args())
+        callback = CustomJS(args=callback_args, code=callback_slider)
 
         self.manual_id_selection_slider.js_on_change('value', callback)
         return column([hint_div, self.manual_id_selection_slider])
@@ -1154,8 +1145,14 @@ class BokehBioImageDataVis:
             height = self._get_auto_video_height(key, width)
 
         unique_html_id = uuid.uuid4()
-        video_update_js = (f'    document.getElementById("{unique_html_id}").src = encodeURI(source.data["{key}"][index].replace(/\\\\/g, "/")).replace(/#/g, "%23");\n'
-                           f'    document.getElementById("{unique_html_id}").setAttribute("data-value", index);\n')
+        div_arg = f'video_div_{len(self.registered_video_elements)}'
+        video_update_js = (f'    const videoElement = bbdv_find_element({div_arg}, "{unique_html_id}");\n'
+                           '    if (videoElement != null) {\n'
+                           '        if (!window._bbdvVideos) { window._bbdvVideos = new Set(); }\n'
+                           '        window._bbdvVideos.add(videoElement);\n'
+                           f'        videoElement.src = encodeURI(source.data["{key}"][index].replace(/\\\\/g, "/")).replace(/#/g, "%23");\n'
+                           '        videoElement.setAttribute("data-value", index);\n'
+                           '    }\n')
         div_video, JS_code = video_html_and_callback(unique_html_id=unique_html_id,
                                                      df=self.df, key=key,
                                                      video_width=width, video_height=height,
@@ -1170,13 +1167,14 @@ class BokehBioImageDataVis:
             'title': title,
             'autoplay': autoplay,
             'js_update': video_update_js,
+            'div_arg': div_arg,
         })
+        self._refresh_registered_video_divs()
 
         video_JS_callback = CustomJS(args=dict(source=self.csd_source, div=div_video),
                                      code=JS_code)
 
-        video_hover_tool = HoverTool(tooltips=None, names=['main_graph'])
-        video_hover_tool.callback = video_JS_callback
+        video_hover_tool = self._make_hover_tool(video_JS_callback)
 
         self.scatter_figure.add_tools(video_hover_tool)
 
@@ -1254,12 +1252,20 @@ class BokehBioImageDataVis:
             df_keys_to_ignore += ignore_keys
 
 
-        div_text, code_text, js_update_str = text_html_and_callback(unique_id=unique_html_id,
-                                                                    df=self.df, df_keys_to_show=df_keys_to_show,
-                                                                    df_keys_to_ignore=df_keys_to_ignore,
-                                                                    width=width,
-                                                                    height=height,
-                                                                    float_precision=self.scatter_data_hover_float_precision)
+        div_arg = f'text_div_{len(self.registered_text_elements)}'
+        div_text, code_text, _ = text_html_and_callback(unique_id=unique_html_id,
+                                                        df=self.df, df_keys_to_show=df_keys_to_show,
+                                                        df_keys_to_ignore=df_keys_to_ignore,
+                                                        width=width,
+                                                        height=height,
+                                                        float_precision=self.scatter_data_hover_float_precision)
+        _, _, js_update_str = text_html_and_callback(unique_id=unique_html_id,
+                                                     df=self.df, df_keys_to_show=df_keys_to_show,
+                                                     df_keys_to_ignore=df_keys_to_ignore,
+                                                     width=width,
+                                                     height=height,
+                                                     float_precision=self.scatter_data_hover_float_precision,
+                                                     div_var=div_arg)
 
         div_text.css_classes = ["text_hover_display"]
 
@@ -1272,13 +1278,13 @@ class BokehBioImageDataVis:
             'df_keys_to_ignore': None if df_keys_to_ignore is None else list(df_keys_to_ignore),
             'width': width,
             'height': height,
+            'div_arg': div_arg,
         })
 
         callback_text = CustomJS(args=dict(source=self.csd_source, div=div_text),
                                  code=code_text)
 
-        hover_text = HoverTool(tooltips=None, names=['main_graph'])
-        hover_text.callback = callback_text
+        hover_text = self._make_hover_tool(callback_text)
         self.scatter_figure.add_tools(hover_text)
 
         return div_text
@@ -1379,13 +1385,14 @@ class BokehBioImageDataVis:
             axesselect_x=self.axesselect_x,
             axesselect_y=self.axesselect_y,
         )
+        selector_args.update(self._registered_div_args())
         if self.scatter_legend is not None:
             selector_args['legend'] = self.scatter_legend
             selector_args['dataset_legend_items'] = self.dataset_legend_items
         if hasattr(self, 'manual_id_selection_slider'):
             selector_args['manual_id_selection'] = self.manual_id_selection_slider
 
-        selector_code = """
+        selector_code = BBDV_DOM_HELPER_JS + """
         const dataset_index = dataset_labels.indexOf(dataset_selector.value);
         const selected_source = dataset_sources[dataset_index];
         const new_data = {};
@@ -1454,17 +1461,7 @@ class BokehBioImageDataVis:
             )
             registered_image_element['div'].text = image_div.text
 
-        for registered_video_element in self.registered_video_elements:
-            video_div, _ = video_html_and_callback(
-                unique_html_id=registered_video_element['id'],
-                df=self.df,
-                key=registered_video_element['key'],
-                video_width=registered_video_element['width'],
-                video_height=registered_video_element['height'],
-                title=registered_video_element['title'],
-                autoplay=registered_video_element['autoplay'],
-            )
-            registered_video_element['div'].text = video_div.text
+        self._refresh_registered_video_divs()
 
         for registered_text_element in self.registered_text_elements:
             text_div, _, _ = text_html_and_callback(
