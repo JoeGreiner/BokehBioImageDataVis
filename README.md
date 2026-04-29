@@ -20,7 +20,7 @@ BokehBioImageDataVis is a simple but effective extension of the Bokeh visualisat
 
 1. Optional: Create a conda environment and activate it. 
 ```bash
-conda create --name bokeh_vis python=3.9
+conda create --name bokeh_vis python=3.10
 conda activate bokeh_vis
 ```
 2. Install BokehBioImageDataVis using pip.
